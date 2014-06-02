@@ -2,4 +2,4 @@ This project contains both regular c++ and gpu accelerated programs for simulati
 
 The source code for the c++ program is in the directory /src/cpp and the source for the cuda accelerated program is in the directory /src/cuda.  Both directories contain makefiles (for the GNU make utility) which I use to compile on bluehive and will hopefully work without need for modification.  To compile, navigate to the appropriate source directory and just type "make".
 
-There are a number of pbs scripts in the /input directory which are used for submitting jobs.  These will need to be modified to configure the simulation for each run.  You may also need to modify them depending on where you put your project on the filesystem.
+There are a number of pbs scripts in the /input directory which are used for submitting jobs.  These will need to be modified to configure the simulation for each run.  You may also need to modify them depending on where you put your project on the filesystem.  The file input/input_key.txt describes the parameters for the simulation.
