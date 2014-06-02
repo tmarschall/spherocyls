@@ -1,0 +1,10 @@
+*.out
+*.log
+exe/*
+!exe/.gitkeep
+**.cpp~
+**.h~
+**.cu~
+**.txt~
+**.pbs~
+

@@ -1,9 +1,6 @@
 *.out
 *.log
 exe/*
-**.cpp~
-**.h~
-**.cu~
-**.txt~
-**.pbs~
+!exe/.gitkeep
+**~
 
