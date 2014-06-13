@@ -5,7 +5,7 @@
 #include <iostream>
 #include <math.h>
 #include <fstream>
-#include <stdlib.h>
+#include <cstdlib>
 #include <time.h>
 #include <limits>
 
@@ -308,7 +308,7 @@ bool SpherocylBox::check_neighbors(int p, int q)
   if (fabs(dY) < dSigma + m_dPadding) {
   	double dX = m_psParticles[p].m_dX - m_psParticles[q].m_dX;
   	dX += m_dLx * ((dX < -0.5 * m_dLx) - (dX > 0.5 * m_dLx));
-	dXprime = dX + 0.5 * dY;  // dX at maximum value of gamma
+	double dXprime = dX + 0.5 * dY;  // dX at maximum value of gamma
   	dX += m_dGamma * dY;
   	if (fabs(dX) < dSigma + m_dPadding || fabs(dXprime) < dSigma + m_dPadding) {
   	  return true;
@@ -530,7 +530,7 @@ void SpherocylBox::set_back_gamma()
       }	
     }
   m_dGamma -= 1.0;
-  m_dTotalGamma = int(m_dTotalGamma + 1) + m_dGamma;
+  m_dGammaTotal = int(m_dGammaTotal + 1) + m_dGamma;
   find_neighbors();
 }
 

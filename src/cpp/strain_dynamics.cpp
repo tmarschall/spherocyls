@@ -5,11 +5,13 @@
 #include <iostream>
 #include <math.h>
 #include <fstream>
+#include <cstdlib>
 
 using std::cout;
 using std::endl;
 using std::cerr;
 using std::ios;
+using std::exit;
 
 
 void SpherocylBox::calc_force_pair(int p, int q)

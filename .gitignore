@@ -1,5 +1,5 @@
-*.out
-*.log
+**.out
+**.log
 exe/*
 !exe/.gitkeep
 **~

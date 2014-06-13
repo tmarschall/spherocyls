@@ -5,11 +5,13 @@
 #include <iostream>
 #include <math.h>
 #include <fstream>
+#include <cstdlib>
 
 using std::cout;
 using std::endl;
 using std::cerr;
 using std::ios;
+using std::exit;
 
 
 void SpherocylBox::calc_resized_force_pair(int p, int q, bool bShrink)
@@ -177,7 +179,7 @@ void SpherocylBox::resize_step(bool bShrink)
     m_psTempParticles[i] = m_psParticles[i];
     m_psTempParticles[i].m_dX += m_dStep * dFx0[i];
     m_psTempParticles[i].m_dY += m_dStep * dFy0[i];
-    m_psTempParticles[i].m_dPhi += m_dStep * dTau0[i] / m_psParticles[i].dI;
+    m_psTempParticles[i].m_dPhi += m_dStep * dTau0[i] / m_psParticles[i].m_dI;
     if (bShrink) {
     	m_psTempParticles[i].m_dX *= pow(1.0 - m_dResizeRate, m_dStep);
     	m_psTempParticles[i].m_dY *= pow(1.0 - m_dResizeRate, m_dStep);
@@ -197,7 +199,7 @@ void SpherocylBox::resize_step(bool bShrink)
 
     double dDx = 0.5 * m_dStep * (dFx0[i] + dFx1);
     double dDy = 0.5 * m_dStep * (dFy0[i] + dFy1);
-    double dDphi = 0.5 * m_dStep * (dTau0[i] + dTau1) / m_psParticles[i].dI;
+    double dDphi = 0.5 * m_dStep * (dTau0[i] + dTau1) / m_psParticles[i].m_dI;
     double dX = m_psParticles[i].m_dX;
     double dY = m_psParticles[i].m_dY;
     m_psParticles[i].m_dX += dDx;
@@ -235,7 +237,7 @@ void SpherocylBox::resize_step(bool bShrink)
   
   }
   
-  delete[] dMoi; delete[] dTau0; 
+  delete[] dTau0; 
   delete[] dFx0; delete[] dFy0;
 	
 }

@@ -1,11 +1,13 @@
+# Makefile for the bluehive1 environment
+
 # compilers
 CXX=g++
 NVCC=nvcc
 
 # paths of cuda libraries
-CUDAPATH=/software/cuda/5.5/b1
+CUDAPATH=/usr/local/cuda/5.0/
 # for cudpp:
-#CUDASDKPATH=/usr/local/cuda/SDK/NVIDIA_GPU_Computing_SDK/C
+CUDASDKPATH=/usr/local/cuda/SDK/NVIDIA_GPU_Computing_SDK/C
 
 # includes for header files
 CXXINCLUDE=-I$(CUDAPATH)/include
@@ -13,7 +15,7 @@ CUDAINCLUDE=-I$(CUDAPATH)/include
 
 # compiler flags: include all warnings, optimization level 3
 CXXFLAGS=-O3 -DGOLD_FUNCS=0
-NVCCFLAGS=--ptxas-options=-v -O3 -arch=sm_35 -DGOLD_FUNCS=0
+NVCCFLAGS=--ptxas-options=-v -O3 -arch=sm_20 -DGOLD_FUNCS=0
 # linker flags: include all warnings, include library files
 LDFLAGS=-Wall -L$(CUDAPATH)/lib64 -lcudart
 
@@ -23,13 +25,13 @@ NVCCOBJECTS=find_neighbors.o calculate_stress_energy.o data_primitives_2.o strai
 
 # final executable
 EXE=../../exe/spherocyl_box
-#PROF_EXE=../../exe/spherocyl_box_profile
+PROF_EXE=../../exe/spherocyl_box_profile
 
 #rules:
 
 all: $(EXE) $(PROF_EXE)
 strain: $(EXE)
-#prof: $(PROF_EXE)
+prof: $(PROF_EXE)
 
 ######################
 # compile executable #
@@ -49,8 +51,8 @@ $(PROF_EXE): $(CXXOBJECTS) $(NVCCOBJECTS) main_profile.o
 main.o: main.cpp spherocyl_box.h
 	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -c main.cpp
 
-#main_profile.o: main_profile.cpp spherocyl_box.h
-#	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -c main_profile.cpp
+main_profile.o: main_profile.cpp spherocyl_box.h
+	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -c main_profile.cpp
 
 spherocyl_box.o: spherocyl_box.cpp spherocyl_box.h
 	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -c spherocyl_box.cpp
