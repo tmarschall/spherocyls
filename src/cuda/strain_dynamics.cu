@@ -711,8 +711,10 @@ void Spherocyl_Box::run_strain(double dStartGamma, double dStopGamma, double dSv
   while (nTime < nStop)
     {
       bool bSvPos = (nTime % nSvPosInterval == 0);
-      if (bSvPos)
+      if (bSvPos) {
 	strain_step(nTime, 1, 1);
+	fflush(m_pOutfSE);
+      }
       else
 	{
 	  bool bSvStress = (nTotalStep % nSvStressInterval == 0);
@@ -739,6 +741,7 @@ void Spherocyl_Box::run_strain(double dStartGamma, double dStopGamma, double dSv
   m_fP = 0.5 * (*m_pfPxx + *m_pfPyy);
   fprintf(m_pOutfSE, "%lu %.7g %.7g %.7g %.7g %.7g\n", 
 	  nTime, *m_pfEnergy, *m_pfPxx, *m_pfPyy, m_fP, *m_pfPxy);
+  fflush(m_pOutfSE);
   save_positions(nTime);
   
   fclose(m_pOutfSE);
