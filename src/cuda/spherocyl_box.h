@@ -155,11 +155,11 @@ class Spherocyl_Box
 
  public:
   Spherocyl_Box(int nSpherocyls, double dL, double dRMax, double dAMax, 
-		double dEpsilon = 0.1,  int nMaxPPC = 15, int nMaxNbrs = 25, 
+		double dEpsilon = 0.1,  int nMaxPPC = 15, int nMaxNbrs = 35, 
 		Potential ePotential = HARMONIC);
   Spherocyl_Box(int nSpherocyls, double dL, double *pdX, double *pdY, 
 		double *pdPhi, double *pdR, double *pdA, double dEpsilon = 0.1,
-		int nMaxPPC = 15, int nMaxNbrs = 25, Potential ePotential = HARMONIC);
+		int nMaxPPC = 15, int nMaxNbrs = 35, Potential ePotential = HARMONIC);
   ~Spherocyl_Box();
 
   void place_random_spherocyls(int seed = 0, bool bRandAngle = 1);

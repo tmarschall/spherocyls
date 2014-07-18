@@ -60,8 +60,8 @@ void SpherocylBox::calc_force_pair(int p, int q)
 
 	    double dFx = dDx * dDVij / dDij;
 	    double dFy = dDy * dDVij / dDij;
-	    double dTauP = (s*nxA - 0.5*dDx) * dFy - (s*nyA - 0.5*dDy) * dFx;
-	    double dTauQ = (t*nyB + 0.5*dDy) * dFx - (t*nxB + 0.5*dDx) * dFy;
+	    double dTauP = s*nxA * dFy - s*nyA * dFx;
+	    double dTauQ = t*nyB * dFx - t*nxB * dFy;
 	    //double dMoiP = 4.0 * dAP * dAP / 12.0;
 	    //double dMoiQ = 4.0 * dAQ * dAQ / 12.0;
 	    
@@ -120,8 +120,8 @@ void SpherocylBox::calc_temp_force_pair(int p, int q)
 
 	    double dFx = dDx * dDVij / dDij;
 	    double dFy = dDy * dDVij / dDij;
-	    double dTauP = (s*nxA - 0.5*dDx) * dFy - (s*nyA - 0.5*dDy) * dFx;
-	    double dTauQ = (t*nyB + 0.5*dDy) * dFx - (t*nxB + 0.5*dDx) * dFy;
+	    double dTauP = s*nxA * dFy - s*nyA * dFx;
+	    double dTauQ = t*nyB * dFx - t*nxB * dFy;
 	    //double dMoiP = 4.0 * dAP * dAP / 12.0;
 	    //double dMoiQ = 4.0 * dAQ * dAQ / 12.0;
 	    
@@ -218,10 +218,10 @@ void SpherocylBox::strain_step()
     m_psParticles[i].m_dYMoved += dDy;
     
     if (m_psParticles[i].m_dXMoved > 0.5 * m_dPadding ||
-		m_psParticles[i].m_dXMoved < -0.5 * m_dPadding)
+	m_psParticles[i].m_dXMoved < -0.5 * m_dPadding)
       find_neighbors();
     else if (m_psParticles[i].m_dYMoved > 0.5 * m_dPadding ||
-	     	m_psParticles[i].m_dYMoved < -0.5 * m_dPadding)
+	     m_psParticles[i].m_dYMoved < -0.5 * m_dPadding)
       find_neighbors();
   }
   

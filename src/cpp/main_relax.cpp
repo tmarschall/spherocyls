@@ -71,23 +71,18 @@ int main(int argc, char* argv[])
   cout << strDir << endl;
   int nParticles = int_input(argc, argv, ++argn, "Number of particles");
   cout << nParticles << endl;
-  double dStrainRate = float_input(argc, argv, ++argn, "Strain rate");
-  cout << dStrainRate << endl;
   double dStep = float_input(argc, argv, ++argn, "Integration step size");
   cout << dStep << endl;
-  double dRunLength = float_input(argc, argv, ++argn, "Strain run length (gamma)");
-  cout << dRunLength << endl;
-  double dPosSaveRate = float_input(argc, argv, ++argn, "Position data save rate");
-  cout << dPosSaveRate << endl;
-  double dStressSaveRate = float_input(argc, argv, ++argn, "Stress data save rate");
-  cout << dStressSaveRate << endl;
+  int nRunLength = int_input(argc, argv, ++argn, "Maximum relaxation steps (n)");
+  cout << nRunLength << endl;
+  int nPosSaveRate = int_input(argc, argv, ++argn, "Position data save rate (n)");
+  cout << nPosSaveRate << endl;
+  int nStressSaveRate = int_input(argc, argv, ++argn, "Stress data save rate (n)");
+  cout << nStressSaveRate << endl;
   double dDR = float_input(argc, argv, ++argn, "Cell padding");
   cout << dDR << endl;
 
-  if (dStressSaveRate < dStrainRate * dStep)
-    dStressSaveRate = dStrainRate * dStep;
-  if (dPosSaveRate < dStrainRate)
-    dPosSaveRate = dStrainRate;
+  
 
   double dL;
   double *pdX = new double[nParticles];
@@ -136,9 +131,9 @@ int main(int argc, char* argv[])
     dPacking = cData.getHeadFloat(2);
     dGamma = cData.getHeadFloat(3);
     dTotalGamma = cData.getHeadFloat(4);
-    if (cData.getHeadFloat(5) != dStrainRate) {
-      cerr << "Warning: Strain rate in data file does not match the requested rate" << endl;
-    }
+    //if (cData.getHeadFloat(5) != dStrainRate) {
+    //  cerr << "Warning: Strain rate in data file does not match the requested rate" << endl;
+    //}
     if (cData.getHeadFloat(6) != dStep) {
       cerr << "Warning: Integration step size in data file does not match requested step" << endl;
     }
@@ -169,11 +164,12 @@ int main(int argc, char* argv[])
   cBox->calc_se();
   cBox->display(1,1);
   cBox->set_output_directory(strDir);
-  cBox->set_se_file("sp_strain_se.dat");
-  cBox->set_strain_rate(dStrainRate);
+  cBox->set_se_file("sr_strain_se.dat");
+  cBox->set_strain_rate(0);
   cBox->set_step(dStep);
-  nTime = cBox->run_strain(dRunLength, nTime);
-  
+  cBox->set_pos_save_step((double)nPosSaveRate);
+  cBox->gradient_descent_minimize(nRunLength, 0.0);
+  cBox->display(1,1);
 
   int tStop = time(0);
   cout << "\nRun Time: " << tStop - tStart << endl;

@@ -190,7 +190,7 @@ int main(int argc, char* argv[])
   cout << "Neighbor lists created" << endl;
   cSpherocyls->calculate_stress_energy();
   cout << "Stresses calculated" << endl;
-  cSpherocyls->display(1,0,1,1);
+  cSpherocyls->display(1,1,1,1);
 
   /*
   cSpherocyls.find_neighbors();

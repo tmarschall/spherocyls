@@ -72,6 +72,7 @@ private:
   void calc_resized_force_pair(int p, int q, bool bShrink);
   void calc_resized_forces(bool bShrink);
   void resize_step(bool bShrink);
+  void gradient_relax_step();
   void reconfigure_cells();
   bool check_particle_contact(int p, int q);
   bool check_particle_contact(int p);
@@ -102,6 +103,7 @@ public:
   long unsigned int run_strain(double dRunLength, long unsigned int nTime);
   long unsigned int resize_box(double dFinalPacking);
   long unsigned int resize_box(double dFinalPacking, long unsigned int nTime);
+  void gradient_descent_minimize(int nMaxSteps = 1000000, double dMinE = 0);
   
   void set_output_directory(std::string strOutputDir) { m_strOutputDir = strOutputDir; }
   void set_se_file(std::string strSEOutput) { m_strSEOutput = strSEOutput; }

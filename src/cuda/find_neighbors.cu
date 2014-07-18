@@ -324,12 +324,33 @@ __global__ void set_back_coords(int nSpherocyls, double dL, double *pdX, double 
 
 }
 
+
 void Spherocyl_Box::set_back_gamma()
 {
   cudaMemset((void *) d_pnPPC, 0, sizeof(int)*m_nCells);
   cudaMemset((void *) d_pdXMoved, 0, sizeof(double)*m_nSpherocyls);
   cudaMemset((void *) d_pdYMoved, 0, sizeof(double)*m_nSpherocyls);
   cudaMemset((void *) d_bNewNbrs, 0, sizeof(int));
+
+  /*
+  int *h_pnCellID = (int*) malloc(sizeof(int)*m_nSpherocyls);
+  int *h_pnNPP = (int*) malloc(sizeof(int)*m_nSpherocyls);
+  int *h_pnNbrList = (int*) malloc(sizeof(int)*m_nSpherocyls*m_nMaxNbrs);
+  cudaMemcpy(h_pnCellID, d_pnCellID, sizeof(int)*m_nSpherocyls, cudaMemcpyDeviceToHost);
+  cudaMemcpy(h_pnNPP,d_pnNPP, sizeof(int)*m_nSpherocyls,cudaMemcpyDeviceToHost);
+  cudaMemcpy(h_pnNbrList, d_pnNbrList, sizeof(int)*m_nSpherocyls*m_nMaxNbrs, cudaMemcpyDeviceToHost);
+
+  printf("\nSetting coordinate system back by gamma\n\nOld neighbors:");
+  for (int p = 0; p < m_nSpherocyls; p++) {
+    printf("Spherocyl: %d, Cell: %d, neighbors: %d\n", 
+	   p, h_pnCellID[p], h_pnNPP[p]);
+    for (int n = 0; n < h_pnNPP[p]; n++) {
+      printf("%d ", h_pnNbrList[n*m_nSpherocyls + p]);
+    }
+    printf("\n");
+    fflush(stdout);
+  }
+*/
 
   set_back_coords <<<m_nGridSize, m_nBlockSize>>> 
     (m_nSpherocyls, m_dL, d_pdX, d_pdY, d_pdPhi);
@@ -339,6 +360,24 @@ void Spherocyl_Box::set_back_gamma()
   m_dTotalGamma = int(m_dTotalGamma+1) + m_dGamma;  // Gamma total will have diverged slightly due to differences in precision with gamma
 
   find_neighbors();
+
+  /*
+  cudaMemcpy(h_pnCellID, d_pnCellID, sizeof(int)*m_nSpherocyls, cudaMemcpyDeviceToHost);
+  cudaMemcpy(h_pnNPP,d_pnNPP, sizeof(int)*m_nSpherocyls,cudaMemcpyDeviceToHost);
+  cudaMemcpy(h_pnNbrList, d_pnNbrList, sizeof(int)*m_nSpherocyls*m_nMaxNbrs, cudaMemcpyDeviceToHost);
+  printf("\nNew Neighbors:\n");
+  for (int p = 0; p < m_nSpherocyls; p++) {
+    printf("Spherocyl: %d, Cell: %d, neighbors: %d\n", 
+	   p, h_pnCellID[p], h_pnNPP[p]);
+    for (int n = 0; n < h_pnNPP[p]; n++) {
+      printf("%d ", h_pnNbrList[n*m_nSpherocyls + p]);
+    }
+    printf("\n");
+    fflush(stdout);
+  }
+  
+  free(h_pnCellID); free(h_pnNPP); free(h_pnNbrList);
+  */
 }
 
 

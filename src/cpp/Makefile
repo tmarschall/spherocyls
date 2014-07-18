@@ -8,17 +8,19 @@ CXXINCLUDE=
 CXXFLAGS=-O3 -Wall
 
 # object files
-CXXOBJECTS=spherocyl_box.o dat_file_input.o strain_dynamics.o resize_dynamics.o
+CXXOBJECTS=spherocyl_box.o dat_file_input.o strain_dynamics.o resize_dynamics.o relaxation_dynamics.o
 
 # final executable
 STR_EXE=../../exe/cpp_spherocyl_strain
 RESZ_EXE=../../exe/cpp_spherocyl_resize
+MIN_EXE=../../exe/cpp_spherocyl_minimize
 
 #rules:
 
 all: $(STR_EXE) $(RESZ_EXE)
 strain: $(STR_EXE)
 resize: $(RESZ_EXE)
+minimize: $(MIN_EXE)
 
 ######################
 # compile executable #
@@ -29,6 +31,9 @@ $(STR_EXE): $(CXXOBJECTS) main.o
 
 $(RESZ_EXE): $(CXXOBJECTS) main_resize.o
 	$(CXX) -o $(RESZ_EXE) main_resize.o $(CXXOBJECTS)
+
+$(MIN_EXE): $(CXXOBJECTS) main_relax.o
+	$(CXX) -o $(MIN_EXE) main_relax.o $(CXXOBJECTS)
 
 ###################
 # compile objects #
@@ -41,6 +46,9 @@ main.o: main.cpp spherocyl_box.h
 main_resize.o: main_resize.cpp spherocyl_box.h
 	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -c main_resize.cpp
 
+main_resize.o: main_relax.cpp spherocyl_box.h
+	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -c main_relax.cpp
+
 spherocyl_box.o: spherocyl_box.cpp spherocyl_box.h
 	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -c spherocyl_box.cpp
 
@@ -52,6 +60,9 @@ strain_dynamics.o: spherocyl_box.h strain_dynamics.cpp
 
 resize_dynamics.o: spherocyl_box.h resize_dynamics.cpp
 	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -c resize_dynamics.cpp
+
+relaxation_dynamics.o: spherocyl_box.h relaxation_dynamics.cpp
+	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -c relaxation_dynamics.cpp
 
 
 #clean up object files or other assembly files
