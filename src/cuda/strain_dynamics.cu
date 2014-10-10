@@ -413,8 +413,8 @@ __global__ void heun_corr(int nSpherocyls, int *pnNPP,int *pnNbrList,double dL, 
       for (int p = 0; p < nNbrs; p++)
 	{
 	  int nAdjPID = pnNbrList[nPID + p * nSpherocyls];
-	  double dAdjX = pdX[nAdjPID];
-	  double dAdjY = pdY[nAdjPID];
+	  double dAdjX = pdTempX[nAdjPID];
+	  double dAdjY = pdTempY[nAdjPID];
 
 	  double dDeltaX = dX - dAdjX;
 	  double dDeltaY = dY - dAdjY;
