@@ -37,7 +37,7 @@ __global__ void calc_se(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL,
   int nPID = thid + blockIdx.x * blockDim.x;
   int nThreads = blockDim.x * gridDim.x;
   int offset = blockDim.x + 8; // +8 helps to avoid bank conflicts
-  for (int i = 0; i < 4; i++)
+  for (int i = 0; i < 5; i++)
     sData[i*offset + thid] = 0.0;
   __syncthreads();  // synchronizes every thread in the block before going on
 
@@ -115,9 +115,10 @@ __global__ void calc_se(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL,
 	      if (nAdjPID > nPID)
 		{
 		  sData[thid] += dDVij * dSigma * (1.0 - dDij / dSigma) / (dAlpha * dL * dL);
-		  sData[thid + offset] += dPfx * dDx / (dL * dL);
-		  sData[thid + 2*offset] += dPfy * dDy / (dL * dL);
-		  sData[thid + 3*offset] += dPfx * dDy / (dL * dL);
+		  sData[thid + offset] += dPfx * dDeltaX / (dL * dL);
+		  sData[thid + 2*offset] += dPfy * dDeltaY / (dL * dL);
+		  sData[thid + 3*offset] += dPfy * dDeltaX / (dL * dL);
+		  sData[thid + 4*offset] += dPfx * dDeltaY / (dL * dL);
 		} 
 	    }
 	}
@@ -136,15 +137,23 @@ __global__ void calc_se(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL,
   sData[base] += sData[base + stride];
   base += 2*offset;
   sData[base] += sData[base + stride];
+  if (thid < stride) {
+    base += 2*offset;
+    sData[base] += sData[base + stride];
+  }
   stride /= 2; // stride is 1/4 block size, all threads perform 1 add
   __syncthreads();
   base = thid % stride + offset * (thid / stride);
   sData[base] += sData[base + stride];
+  if (thid < stride) {
+    base += 4*offset;
+    sData[base] += sData[base+stride];
+  }
   stride /= 2;
   __syncthreads();
-  while (stride > 8)
+  while (stride > 4)
     {
-      if (thid < 4 * stride)
+      if (thid < 5 * stride)
 	{
 	  base = thid % stride + offset * (thid / stride);
 	  sData[base] += sData[base + stride];
@@ -152,23 +161,18 @@ __global__ void calc_se(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL,
       stride /= 2;  
       __syncthreads();
     }
-  if (thid < 32) //unroll end of loop
+  if (thid < 20)
     {
-      base = thid % 8 + offset * (thid / 8);
-      sData[base] += sData[base + 8];
-      if (thid < 16)
+      base = thid % 4 + offset * (thid / 4);
+      sData[base] += sData[base + 4];
+      if (thid < 10)
 	{
-	  base = thid % 4 + offset * (thid / 4);
-	  sData[base] += sData[base + 4];
-	  if (thid < 8)
+	  base = thid % 2 + offset * (thid / 2);
+	  sData[base] += sData[base + 2];
+	  if (thid < 5)
 	    {
-	      base = thid % 2 + offset * (thid / 2);
-	      sData[base] += sData[base + 2];
-	      if (thid < 4)
-		{
-		  sData[thid * offset] += sData[thid * offset + 1];
-		  float tot = atomicAdd(pfSE+thid, (float)sData[thid*offset]);	    
-		}
+	      sData[thid * offset] += sData[thid * offset + 1];
+	      float tot = atomicAdd(pfSE+thid, (float)sData[thid*offset]);	    
 	    }
 	}
     } 
@@ -177,7 +181,7 @@ __global__ void calc_se(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL,
 
 void Spherocyl_Box::calculate_stress_energy()
 {
-  cudaMemset((void*) d_pfSE, 0, 4*sizeof(float));
+  cudaMemset((void*) d_pfSE, 0, 5*sizeof(float));
   
   //dim3 grid(m_nGridSize);
   //dim3 block(m_nBlockSize);
@@ -353,7 +357,7 @@ for (int thid = 0; thid < nBlockDim; thid++)
   int nPID = thid + b * nBlockDim;
   int nThreads = nBlockDim * nGridDim;
   int offset = nBlockDim + 8; // +8 helps to avoid bank conflicts (I think)
-  for (int i = 0; i < 4; i++)
+  for (int i = 0; i < 5; i++)
     sData[thid + i*offset] = 0.0;
   double dFx = 0.0;
   double dFy = 0.0;
@@ -404,7 +408,8 @@ for (int thid = 0; thid < nBlockDim; thid++)
 		  sData[thid] += dDVij * dSigma * (1.0 - dDelR / dSigma) / (dAlpha * dL * dL);
 		  sData[thid + offset] += dPfx * dDeltaX / (dL * dL);
 		  sData[thid + 2*offset] += dPfy * dDeltaY / (dL * dL);
-		  sData[thid + 3*offset] += dPfx * dDeltaY / (dL * dL);
+		  sData[thid + 3*offset] += dPfy * dDeltaX / (dL * dL);
+		  sData[thid + 4*offset] += dPfx * dDeltaY / (dL * dL);
 		} 
 	    }
 	}
@@ -417,7 +422,7 @@ for (int thid = 0; thid < nBlockDim; thid++)
     }
   
   // Now we do a parallel reduction sum to find the total number of contacts
-  for (int s = 0; s < 4; s++)
+  for (int s = 0; s < 5; s++)
     pfSE[s] += sData[thid + s*offset];
 	 
   }
@@ -433,7 +438,7 @@ void Spherocyl_Box::calculate_stress_energy_gold()
   cudaMemcpy(g_pdY, d_pdY, sizeof(double)*m_nSpherocyls, cudaMemcpyDeviceToHost);
   cudaMemcpy(g_pdR, d_pdR, sizeof(double)*m_nSpherocyls, cudaMemcpyDeviceToHost);
 
-  for (int i = 0; i < 4; i++)
+  for (int i = 0; i < 5; i++)
     g_pfSE[i] = 0.0;
 
   switch (m_ePotential)

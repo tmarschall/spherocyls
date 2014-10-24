@@ -46,7 +46,7 @@ main.o: main.cpp spherocyl_box.h
 main_resize.o: main_resize.cpp spherocyl_box.h
 	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -c main_resize.cpp
 
-main_resize.o: main_relax.cpp spherocyl_box.h
+main_relax.o: main_relax.cpp spherocyl_box.h
 	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -c main_relax.cpp
 
 spherocyl_box.o: spherocyl_box.cpp spherocyl_box.h

@@ -337,7 +337,7 @@ long unsigned int SpherocylBox::run_strain(double dRunLength)
   if (nTime == 0) {
   	outfSE.open(strSEPath.c_str());
   	calc_se();
-	outfSE << 0 << " " << m_dEnergy << " " << m_dPxx << " " << m_dPyy << " " << m_dPxy << endl;
+	outfSE << 0 << " " << m_dEnergy << " " << m_dPxx << " " << m_dPyy << " " << m_dPxy << " " << m_dPyx << endl;
 	save_positions("sp0000000000.dat");
   }
   else {
@@ -355,14 +355,14 @@ long unsigned int SpherocylBox::run_strain(double dRunLength)
 		strain_step();
 		if (s % nSESaveT == 0) {
 			calc_se();
-			outfSE << t << " " <<  m_dEnergy << " " << m_dPxx << " " << m_dPyy << " " << m_dPxy << "\n";
+			outfSE << t << " " <<  m_dEnergy << " " << m_dPxx << " " << m_dPyy << " " << m_dPxy << " " << m_dPyx << "\n";
 	 	}
 	 	else {
 	 		calc_forces();
 	 	}
 	}
 	if (t*nIntSteps % nSESaveT == 0) {
-		outfSE << t << " " <<  m_dEnergy << " " << m_dPxx << " " << m_dPyy << " " << m_dPxy << "\n";
+	  outfSE << t << " " <<  m_dEnergy << " " << m_dPxx << " " << m_dPyy << " " << m_dPxy << " " << m_dPyx << "\n";
 	}
 	if (t % nPosSaveT == 0) {
 		outfSE.flush();

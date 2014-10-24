@@ -19,6 +19,7 @@
 #include <string.h>
 
 enum Potential {HARMONIC = 2, HERTZIAN = 5};
+enum initialConfig {RANDOM, RANDOM_ALIGNED, ZERO_E, ZERO_E_ALIGNED};
 
 class Spherocyl_Box
 {
@@ -87,6 +88,7 @@ class Spherocyl_Box
   float *m_pfPxx;
   float *m_pfPyy;
   float *m_pfPxy;
+  float *m_pfPyx;
   float m_fP;  // Total pressure
   float *h_pfSE;  // Array for transfering the stresses and energy
   double *h_pdFx;
@@ -155,8 +157,8 @@ class Spherocyl_Box
 
  public:
   Spherocyl_Box(int nSpherocyls, double dL, double dRMax, double dAMax, 
-		double dEpsilon = 0.1,  int nMaxPPC = 15, int nMaxNbrs = 35, 
-		Potential ePotential = HARMONIC);
+		initialConfig config, double dEpsilon = 0.1,  int nMaxPPC = 15, 
+		int nMaxNbrs = 35, Potential ePotential = HARMONIC);
   Spherocyl_Box(int nSpherocyls, double dL, double *pdX, double *pdY, 
 		double *pdPhi, double *pdR, double *pdA, double dEpsilon = 0.1,
 		int nMaxPPC = 15, int nMaxNbrs = 35, Potential ePotential = HARMONIC);

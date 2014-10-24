@@ -5,6 +5,8 @@
 #ifndef SPHEROCYL_BOX_H
 #define SPHEROCYL_BOX_H
 
+enum initialConfig {RANDOM, RANDOM_ALIGNED, ZERO_E, ZERO_E_ALIGNED}; 
+
 struct Spherocyl {
   double m_dX;  //the x-coordinate
   double m_dY;  //the y-coordinate
@@ -44,6 +46,7 @@ private:
   double m_dPxx;
   double m_dPyy;
   double m_dPxy;
+  double m_dPyx;  // Will probably not be the same as Pxy because there may be a net torque while shearing
 
   Spherocyl *m_psParticles;
   Spherocyl *m_psTempParticles;
@@ -97,8 +100,7 @@ public:
   void save_positions(std::string strFile);
   void calc_se();
   void calc_forces();
-  void random_zero_energy_configuration(double dA, double dR);
-  void random_configuration(double dA, double dR);
+  void random_configuration(double dA, double dR, initialConfig config = RANDOM);
   long unsigned int run_strain(double dRunLength);
   long unsigned int run_strain(double dRunLength, long unsigned int nTime);
   long unsigned int resize_box(double dFinalPacking);

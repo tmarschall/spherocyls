@@ -99,6 +99,7 @@ int main(int argc, char* argv[])
   double dTotalGamma;
   long unsigned int nTime = 0;
   double dPacking;
+  initialConfig config;
   if (strFile == "r")
   {
     double dPacking = float_input(argc, argv, ++argn, "Packing Fraction");
@@ -107,6 +108,12 @@ int main(int argc, char* argv[])
     cout << dA << endl;
     double dR = float_input(argc, argv, ++argn, "Radius");
     cout << dR << endl;
+    if (argc > ++argn) {
+      config = (initialConfig)int_input(argc, argv, argn, "Initial configuration (0: random, 1: random-aligned, 2: zero-energy, 3: zero-energy-aligned)");
+    }
+    else {
+      config = RANDOM;
+    }
     double dArea = nSpherocyls*(4*dA + D_PI * dR)*dR;
     dL = sqrt(dArea / dPacking);
     cout << "Box length L: " << dL << endl;
@@ -166,7 +173,7 @@ int main(int argc, char* argv[])
   Spherocyl_Box *cSpherocyls;
   if (strFile == "r") {
     cout << "Initializing box of length " << dL << " with " << nSpherocyls << " particles.";
-    cSpherocyls = new Spherocyl_Box(nSpherocyls, dL, dRMax, dAMax, dDR);
+    cSpherocyls = new Spherocyl_Box(nSpherocyls, dL, dRMax, dAMax, config, dDR);
   }
   else {
     cout << "Initializing box from file of length " << dL << " with " << nSpherocyls << " particles.";

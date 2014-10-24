@@ -1,7 +1,7 @@
 
 // -*- c++ -*-
 /*
-* calculate_stress_energy.cu
+* strain_dynamics.cu
 *
 *
 */
@@ -64,7 +64,7 @@ __global__ void euler_est_sc(int nSpherocyls, int *pnNPP, int *pnNbrList, double
   extern __shared__ double sData[];
   int offset = blockDim.x + 8; // +8 should help to avoid a few bank conflict
   if (bCalcStress) {
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 5; i++)
       sData[i*offset + thid] = 0.0;
   __syncthreads();  // synchronizes every thread in the block before going on
   }
@@ -145,9 +145,10 @@ __global__ void euler_est_sc(int nSpherocyls, int *pnNPP, int *pnNbrList, double
 		  if (nAdjPID > nPID)
 		    {
 		      sData[thid] += dDVij * dSigma * (1.0 - dDij / dSigma) / (dAlpha * dL * dL);
-		      sData[thid + offset] += dPfx * dDx / (dL * dL);
-		      sData[thid + 2*offset] += dPfy * dDy / (dL * dL);
-		      sData[thid + 3*offset] += dPfx * dDy / (dL * dL);
+		      sData[thid + offset] += dPfx * dDeltaX / (dL * dL);
+		      sData[thid + 2*offset] += dPfy * dDeltaY / (dL * dL);
+		      sData[thid + 3*offset] += dPfy * dDeltaX / (dL * dL);
+		      sData[thid + 4*offset] += dPfx * dDeltaY / (dL * dL);
 		    } 
 		}
 	    }
@@ -173,15 +174,23 @@ __global__ void euler_est_sc(int nSpherocyls, int *pnNPP, int *pnNbrList, double
     sData[base] += sData[base + stride];
     base += 2*offset;
     sData[base] += sData[base + stride];
+    if (thid < stride) {
+      base += 2*offset;
+      sData[base] += sData[base + stride];
+    }
     stride /= 2; // stride is 1/4 block size, all threads perform 1 add
     __syncthreads();
     base = thid % stride + offset * (thid / stride);
     sData[base] += sData[base + stride];
+    if (thid < stride) {
+      base += 4*offset;
+      sData[base] += sData[base+stride];
+    }
     stride /= 2;
     __syncthreads();
-    while (stride > 8)
+    while (stride > 4)
       {
-	if (thid < 4 * stride)
+	if (thid < 5 * stride)
 	  {
 	    base = thid % stride + offset * (thid / stride);
 	    sData[base] += sData[base + stride];
@@ -189,28 +198,23 @@ __global__ void euler_est_sc(int nSpherocyls, int *pnNPP, int *pnNbrList, double
 	stride /= 2;  
 	__syncthreads();
       }
-    if (thid < 32) //unroll end of loop
+    if (thid < 20)
       {
-	base = thid % 8 + offset * (thid / 8);
-	sData[base] += sData[base + 8];
-	if (thid < 16)
+	base = thid % 4 + offset * (thid / 4);
+	sData[base] += sData[base + 4];
+	if (thid < 10)
 	  {
-	    base = thid % 4 + offset * (thid / 4);
-	    sData[base] += sData[base + 4];
-	    if (thid < 8)
+	    base = thid % 2 + offset * (thid / 2);
+	    sData[base] += sData[base + 2];
+	    if (thid < 5)
 	      {
-		base = thid % 2 + offset * (thid / 2);
-		sData[base] += sData[base + 2];
-		if (thid < 4)
-		  {
-		    sData[thid * offset] += sData[thid * offset + 1];
-		    float tot = atomicAdd(pfSE+thid, (float)sData[thid*offset]);	    
-		  }
+		sData[thid * offset] += sData[thid * offset + 1];
+		float tot = atomicAdd(pfSE+thid, (float)sData[thid*offset]);	    
 	      }
 	  }
-      }  
-  } 
-}
+      }
+  }  
+} 
 
 
 template<Potential ePot, int bCalcStress>
@@ -226,7 +230,7 @@ __global__ void euler_est(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL
   extern __shared__ double sData[];
   int offset = blockDim.x + 8; // +8 should help to avoid a few bank conflict
   if (bCalcStress) {
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 5; i++)
       sData[i*offset + thid] = 0.0;
   __syncthreads();  // synchronizes every thread in the block before going on
   }
@@ -314,9 +318,10 @@ __global__ void euler_est(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL
 		  if (nAdjPID > nPID)
 		    {
 		      sData[thid] += dDVij * dSigma * (1.0 - dDij / dSigma) / (dAlpha * dL * dL);
-		      sData[thid + offset] += dPfx * dDx / (dL * dL);
-		      sData[thid + 2*offset] += dPfy * dDy / (dL * dL);
-		      sData[thid + 3*offset] += dPfx * dDy / (dL * dL);
+		      sData[thid + offset] += dPfx * dDeltaX / (dL * dL);
+		      sData[thid + 2*offset] += dPfy * dDeltaY / (dL * dL);
+		      sData[thid + 3*offset] += dPfy * dDeltaX / (dL * dL);
+		      sData[thid + 4*offset] += dPfx * dDeltaY / (dL * dL);
 		    } 
 		}
 	    }
@@ -341,15 +346,23 @@ __global__ void euler_est(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL
     sData[base] += sData[base + stride];
     base += 2*offset;
     sData[base] += sData[base + stride];
+    if (thid < stride) {
+      base += 2*offset;
+      sData[base] += sData[base + stride];
+    }
     stride /= 2; // stride is 1/4 block size, all threads perform 1 add
     __syncthreads();
     base = thid % stride + offset * (thid / stride);
     sData[base] += sData[base + stride];
+    if (thid < stride) {
+      base += 2*offset;
+      sData[base] += sData[base + stride];
+    }
     stride /= 2;
     __syncthreads();
-    while (stride > 8)
+    while (stride > 4)
       {
-	if (thid < 4 * stride)
+	if (thid < 5 * stride)
 	  {
 	    base = thid % stride + offset * (thid / stride);
 	    sData[base] += sData[base + stride];
@@ -357,28 +370,24 @@ __global__ void euler_est(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL
 	stride /= 2;  
 	__syncthreads();
       }
-    if (thid < 32) //unroll end of loop
+    if (thid < 20)
       {
-	base = thid % 8 + offset * (thid / 8);
-	sData[base] += sData[base + 8];
-	if (thid < 16)
+	base = thid % 4 + offset * (thid / 4);
+	sData[base] += sData[base + 4];
+	if (thid < 10)
 	  {
-	    base = thid % 4 + offset * (thid / 4);
-	    sData[base] += sData[base + 4];
-	    if (thid < 8)
+	    base = thid % 2 + offset * (thid / 2);
+	    sData[base] += sData[base + 2];
+	    if (thid < 5)
 	      {
-		base = thid % 2 + offset * (thid / 2);
-		sData[base] += sData[base + 2];
-		if (thid < 4)
-		  {
-		    sData[thid * offset] += sData[thid * offset + 1];
-		    float tot = atomicAdd(pfSE+thid, (float)sData[thid*offset]);	    
-		  }
+		sData[thid * offset] += sData[thid * offset + 1];
+		float tot = atomicAdd(pfSE+thid, (float)sData[thid*offset]);	    
 	      }
 	  }
-      }  
-  } 
-}
+      }
+  }  
+} 
+
 
 ///////////////////////////////////////////////////////////////////
 //
@@ -512,7 +521,7 @@ void Spherocyl_Box::strain_step(long unsigned int tTime, bool bSvStress, bool bS
 {
   if (bSvStress)
     {
-      cudaMemset((void *) d_pfSE, 0, 4*sizeof(float));
+      cudaMemset((void *) d_pfSE, 0, 5*sizeof(float));
 
       switch (m_ePotential)
 	{
@@ -531,7 +540,7 @@ void Spherocyl_Box::strain_step(long unsigned int tTime, bool bSvStress, bool bS
       cudaThreadSynchronize();
       checkCudaError("Estimating new particle positions, calculating stresses");
 
-      cudaMemcpyAsync(h_pfSE, d_pfSE, 4*sizeof(float), cudaMemcpyDeviceToHost);
+      cudaMemcpyAsync(h_pfSE, d_pfSE, 5*sizeof(float), cudaMemcpyDeviceToHost);
       if (bSvPos)
 	{
 	  cudaMemcpyAsync(h_pdX, d_pdX, m_nSpherocyls*sizeof(double), cudaMemcpyDeviceToHost);
@@ -580,8 +589,8 @@ void Spherocyl_Box::strain_step(long unsigned int tTime, bool bSvStress, bool bS
   if (bSvStress)
     {
       m_fP = 0.5 * (*m_pfPxx + *m_pfPyy);
-      fprintf(m_pOutfSE, "%lu %.7g %.7g %.7g %.7g %.7g\n", 
-	      tTime, *m_pfEnergy, *m_pfPxx, *m_pfPyy, m_fP, *m_pfPxy);
+      fprintf(m_pOutfSE, "%lu %.7g %.7g %.7g %.7g %.7g %.7g\n", 
+	      tTime, *m_pfEnergy, *m_pfPxx, *m_pfPyy, m_fP, *m_pfPxy, *m_pfPyx);
       if (bSvPos)
 	save_positions(tTime);
     }
@@ -736,11 +745,11 @@ void Spherocyl_Box::run_strain(double dStartGamma, double dStopGamma, double dSv
   calculate_stress_energy();
   cudaMemcpyAsync(h_pdX, d_pdX, m_nSpherocyls*sizeof(double), cudaMemcpyDeviceToHost);
   cudaMemcpyAsync(h_pdY, d_pdY, m_nSpherocyls*sizeof(double), cudaMemcpyDeviceToHost);
-  cudaMemcpyAsync(h_pfSE, d_pfSE, 4*sizeof(float), cudaMemcpyDeviceToHost);
+  cudaMemcpyAsync(h_pfSE, d_pfSE, 5*sizeof(float), cudaMemcpyDeviceToHost);
   cudaThreadSynchronize();
   m_fP = 0.5 * (*m_pfPxx + *m_pfPyy);
-  fprintf(m_pOutfSE, "%lu %.7g %.7g %.7g %.7g %.7g\n", 
-	  nTime, *m_pfEnergy, *m_pfPxx, *m_pfPyy, m_fP, *m_pfPxy);
+  fprintf(m_pOutfSE, "%lu %.7g %.7g %.7g %.7g %.7g &.7g\n", 
+	  nTime, *m_pfEnergy, *m_pfPxx, *m_pfPyy, m_fP, *m_pfPxy, *m_pfPyx);
   fflush(m_pOutfSE);
   save_positions(nTime);
   

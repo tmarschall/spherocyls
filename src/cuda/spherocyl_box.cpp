@@ -156,23 +156,24 @@ void Spherocyl_Box::construct_defaults()
 #endif
   
   // Stress, energy, & force data
-  cudaHostAlloc((void **)&h_pfSE, 4*sizeof(float), 0);
+  cudaHostAlloc((void **)&h_pfSE, 5*sizeof(float), 0);
   m_pfEnergy = h_pfSE;
   m_pfPxx = h_pfSE+1;
   m_pfPyy = h_pfSE+2;
   m_pfPxy = h_pfSE+3;
+  m_pfPyx = h_pfSE+4;
   m_fP = 0;
   h_pdFx = new double[m_nSpherocyls];
   h_pdFy = new double[m_nSpherocyls];
   h_pdFt = new double[m_nSpherocyls];
   // GPU
-  cudaMalloc((void**) &d_pfSE, 4*sizeof(float));
+  cudaMalloc((void**) &d_pfSE, 5*sizeof(float));
   cudaMalloc((void**) &d_pdFx, m_nSpherocyls*sizeof(double));
   cudaMalloc((void**) &d_pdFy, m_nSpherocyls*sizeof(double));
   cudaMalloc((void**) &d_pdFt, m_nSpherocyls*sizeof(double));
-  m_nDeviceMem += 4*sizeof(float) + 3*m_nSpherocyls*sizeof(double);
+  m_nDeviceMem += 5*sizeof(float) + 3*m_nSpherocyls*sizeof(double);
  #if GOLD_FUNCS == 1
-  g_pfSE = new float[4];
+  g_pfSE = new float[5];
   g_pdFx = new double[m_nSpherocyls];
   g_pdFy = new double[m_nSpherocyls];
   g_pdFt = new double[m_nSpherocyls];
@@ -212,7 +213,7 @@ double Spherocyl_Box::calculate_packing()
 
 // Creates the class
 // See spherocyl_box.h for default values of parameters
-Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double dRMax, double dAMax, double dEpsilon, int nMaxPPC, int nMaxNbrs, Potential ePotential)
+Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double dRMax, double dAMax, initialConfig config, double dEpsilon, int nMaxPPC, int nMaxNbrs, Potential ePotential)
 {
   assert(nSpherocyls > 0);
   m_nSpherocyls = nSpherocyls;
@@ -258,7 +259,21 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double dRMax, double dA
 
   construct_defaults();
   cout << "Memory allocated on device (MB): " << (double)m_nDeviceMem / (1024.*1024.) << endl;
-  place_random_spherocyls(0,1);
+  switch (config) {
+  case RANDOM:
+    place_random_spherocyls(0,1);
+    break;
+  case RANDOM_ALIGNED:
+    place_random_spherocyls(0,0);
+    break;
+  case ZERO_E:
+    place_random_0e_spherocyls(0,1);
+    break;
+  case ZERO_E_ALIGNED:
+    place_random_0e_spherocyls(0,0);
+    break;
+  }
+    
   m_dPacking = calculate_packing();
   cout << "Random spherocyls placed" << endl;
   //display(0,0,0,0);
@@ -505,7 +520,7 @@ void Spherocyl_Box::display(bool bParticles, bool bCells, bool bNeighbors, bool 
     }
   if (bStress)
     {
-      cudaMemcpyAsync(h_pfSE, d_pfSE, 4*sizeof(float), cudaMemcpyDeviceToHost);
+      cudaMemcpyAsync(h_pfSE, d_pfSE, 5*sizeof(float), cudaMemcpyDeviceToHost);
       cudaMemcpy(h_pdFx, d_pdFx, m_nSpherocyls*sizeof(double), cudaMemcpyDeviceToHost);
       cudaMemcpy(h_pdFy, d_pdFy, m_nSpherocyls*sizeof(double), cudaMemcpyDeviceToHost);
       cudaMemcpy(h_pdFt, d_pdFt, m_nSpherocyls*sizeof(double), cudaMemcpyDeviceToHost);
@@ -522,6 +537,7 @@ void Spherocyl_Box::display(bool bParticles, bool bCells, bool bNeighbors, bool 
       cout << "Pyy: " << *m_pfPyy << endl;
       cout << "Total P: " << m_fP << endl;
       cout << "Pxy: " << *m_pfPxy << endl;
+      cout << "Pyx: " << *m_pfPyx << endl;
     }
 }
 
