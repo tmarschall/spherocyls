@@ -115,6 +115,8 @@ public:
   void set_pos_save_step(double dPosSaveStep) { m_dPosSaveStep = dPosSaveStep; }
   void set_se_save_step(double dSESaveStep) { m_dSESaveStep = dSESaveStep; }
   void set_cell_padding(double dPadding) { m_dPadding = dPadding; }
+  void set_gamma(double dGamma) { m_dGamma = dGamma; }
+  void set_total_gamma(double dTotalGamma) { m_dGammaTotal = dTotalGamma; }
   
   
 };

@@ -172,7 +172,9 @@ int main(int argc, char* argv[])
   else {
   	cout << "Initializing box from file of length " << dL << " with " << nParticles << " particles.";
   	cBox = new SpherocylBox(dL, nParticles, pdX, pdY, pdPhi, pdA, pdRad, dDR);
-  }
+	cBox->set_gamma(dGamma);
+	cBox->set_total_gamma(dTotalGamma);
+}
   
   cBox->calc_se();
   cBox->display(1,1);

@@ -142,14 +142,16 @@ __global__ void euler_est_sc(int nSpherocyls, int *pnNPP, int *pnNbrList, double
 	      dFt += s*nxA * dPfy - s*nyA * dPfx;
 	      if (bCalcStress)
 		{
+		  double dCx = 0.5*dDx - s*nxA;
+		  double dCy = 0.5*dDy - s*nyA;
+		  sData[thid] += dCx * dPfx / (dL * dL);
+		  sData[thid + offset] += dCy * dPfy / (dL * dL);
+		  sData[thid + 2*offset] += dCx * dPfy / (dL * dL);
+		  sData[thid + 3*offset] += dCy * dPfx / (dL * dL); 
 		  if (nAdjPID > nPID)
 		    {
-		      sData[thid] += dDVij * dSigma * (1.0 - dDij / dSigma) / (dAlpha * dL * dL);
-		      sData[thid + offset] += dPfx * dDeltaX / (dL * dL);
-		      sData[thid + 2*offset] += dPfy * dDeltaY / (dL * dL);
-		      sData[thid + 3*offset] += dPfy * dDeltaX / (dL * dL);
-		      sData[thid + 4*offset] += dPfx * dDeltaY / (dL * dL);
-		    } 
+		      sData[thid + 4*offset] += dDVij * dSigma * (1.0 - dDij / dSigma) / (dAlpha * dL * dL);
+		    }
 		}
 	    }
 	}
@@ -310,19 +312,21 @@ __global__ void euler_est(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL
 	      //  Find the point of contact (with respect to the center of the spherocyl)
 	      //double dCx = s*nxA - 0.5*dDx;
 	      //double dCy = s*nyA - 0.5*dDy; 
-	      double dCx = s*nxA;
-	      double dCy = s*nyA;
-	      dFt += dCx * dPfy - dCy * dPfx;
+	      //double dCx = s*nxA;
+	      //double dCy = s*nyA;
+	      dFt += s*nxA * dPfy - s*nyA * dPfx;
 	      if (bCalcStress)
 		{
+		  double dCx = 0.5*dDx - s*nxA;
+		  double dCy = 0.5*dDy - s*nyA;
+		  sData[thid] += dCx * dPfx / (dL * dL);
+		  sData[thid + offset] += dCy * dPfy / (dL * dL);
+		  sData[thid + 2*offset] += dCx * dPfy / (dL * dL);
+		  sData[thid + 3*offset] += dCy * dPfx / (dL * dL); 
 		  if (nAdjPID > nPID)
 		    {
-		      sData[thid] += dDVij * dSigma * (1.0 - dDij / dSigma) / (dAlpha * dL * dL);
-		      sData[thid + offset] += dPfx * dDeltaX / (dL * dL);
-		      sData[thid + 2*offset] += dPfy * dDeltaY / (dL * dL);
-		      sData[thid + 3*offset] += dPfy * dDeltaX / (dL * dL);
-		      sData[thid + 4*offset] += dPfx * dDeltaY / (dL * dL);
-		    } 
+		      sData[thid + 4*offset] += dDVij * dSigma * (1.0 - dDij / dSigma) / (dAlpha * dL * dL);
+		    }
 		}
 	    }
 	}
@@ -355,7 +359,7 @@ __global__ void euler_est(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL
     base = thid % stride + offset * (thid / stride);
     sData[base] += sData[base + stride];
     if (thid < stride) {
-      base += 2*offset;
+      base += 4*offset;
       sData[base] += sData[base + stride];
     }
     stride /= 2;

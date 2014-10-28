@@ -246,28 +246,36 @@ long unsigned int SpherocylBox::run_strain(double dRunLength, long unsigned int 
 		save_positions("sp0000000000.dat");
 	}
 	else {
-		outfSE.open(strSEPath.c_str(), ios::out | ios::in);
-		if (! outfSE) {
-			cerr << "Output file could not be opened for reading" << endl;
-			exit(1);
-		}
-		bool foundT;
-		char szBuf[200];
-		while (! outfSE.eof()) {
-			outfSE.getline(szBuf, 200);
-			std::string line = szBuf;
-			std::size_t spos = line.find_first_of(' ');
-			std::string strTime = line.substr(0,spos);
-			if (nTime == std::atoi(strTime.c_str())) {
-				foundT = true;
-				break;
-			}	
-		}
-		if (!foundT) {
-			cerr << "Start time not found in output file" << endl;
-			exit(1);
-		}
-		calc_forces();
+	  outfSE.open(strSEPath.c_str(), std::fstream::out | std::fstream::in);
+	  if (! outfSE) {
+	    cerr << "Output file could not be opened for reading" << endl;
+	    exit(1);
+	  }
+	  bool foundT;
+	  std::streampos ppos;
+	  char szBuf[500];
+	  while (! outfSE.eof()) {
+	    outfSE.getline(szBuf, 500);
+	    std::string line = szBuf;
+	    std::streampos spos = line.find_first_of(' ');
+	    std::string strTime = line.substr(0,spos);
+	    if (nTime == std::atoi(strTime.c_str())) {
+	      foundT = true;
+	      ppos = outfSE.tellg();
+	      break;
+	    }	
+	  }
+	  if (!foundT) {
+	    cerr << "Start time not found in output file" << endl;
+	    exit(1);
+	  }
+	  if (ppos == -1) {
+	    outfSE.seekp(0,std::ios::end);
+	    outfSE << "\n";
+	  }
+	  else
+	    outfSE.seekp(ppos);
+	  calc_forces();
 	}
 	
   int nTSteps = int(dRunLength / m_dStrainRate + 0.5);
@@ -277,25 +285,25 @@ long unsigned int SpherocylBox::run_strain(double dRunLength, long unsigned int 
   for (unsigned long int t = nTime+1; t <= nTime + nTSteps; t++)
   {
     for (int s = 1; s <= nIntSteps; s++) {
-		strain_step();
-		if (s % nSESaveT == 0) {
-			calc_se();
-			outfSE << t << " " <<  m_dEnergy << " " << m_dPxx << " " << m_dPyy << " " << m_dPxy << "\n";
-	 	}
-	 	else {
-	 		calc_forces();
-	 	}
-	}
-	if (t*nIntSteps % nSESaveT == 0) {
-		outfSE << t << " " <<  m_dEnergy << " " << m_dPxx << " " << m_dPyy << " " << m_dPxy << "\n";
-	}
-	if (t % nPosSaveT == 0) {
-		outfSE.flush();
-		char szBuf[11];
-		sprintf(szBuf, "%010lu", t);
-		std::string strSaveFile = std::string("sp") + szBuf + std::string(".dat");
-		save_positions(strSaveFile);
-	}
+      strain_step();
+      if (s % nSESaveT == 0) {
+	calc_se();
+	outfSE << t << " " <<  m_dEnergy << " " << m_dPxx << " " << m_dPyy << " " << m_dPxy << "\n";
+      }
+      else {
+	calc_forces();
+      }
+    }
+    if (t*nIntSteps % nSESaveT == 0) {
+      outfSE << t << " " <<  m_dEnergy << " " << m_dPxx << " " << m_dPyy << " " << m_dPxy << "\n";
+    }
+    if (t % nPosSaveT == 0) {
+      outfSE.flush();
+      char szBuf[11];
+      sprintf(szBuf, "%010lu", t);
+      std::string strSaveFile = std::string("sp") + szBuf + std::string(".dat");
+      save_positions(strSaveFile);
+    }
   }
   outfSE.flush();
   outfSE.close();

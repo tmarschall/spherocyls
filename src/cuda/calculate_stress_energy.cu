@@ -109,17 +109,20 @@ __global__ void calc_se(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL,
 		}
 	      double dPfx = dDx * dDVij / dDij;
 	      double dPfy = dDy * dDVij / dDij;
+	      double dCx = 0.5 * dDx - s*nxA;
+	      double dCy = 0.5 * dDy - s*nyA;
 	      dFx += dPfx;
 	      dFy += dPfy;
 	      dFt += s*nxA * dPfy - s*nyA * dPfx;
+
+	      sData[thid] += dCx * dPfx / (dL * dL);
+	      sData[thid + offset] += dCy * dPfy / (dL * dL);
+	      sData[thid + 2*offset] += dCx * dPfy / (dL * dL);
+	      sData[thid + 3*offset] += dCy * dPfx / (dL * dL); 
 	      if (nAdjPID > nPID)
 		{
-		  sData[thid] += dDVij * dSigma * (1.0 - dDij / dSigma) / (dAlpha * dL * dL);
-		  sData[thid + offset] += dPfx * dDeltaX / (dL * dL);
-		  sData[thid + 2*offset] += dPfy * dDeltaY / (dL * dL);
-		  sData[thid + 3*offset] += dPfy * dDeltaX / (dL * dL);
-		  sData[thid + 4*offset] += dPfx * dDeltaY / (dL * dL);
-		} 
+		  sData[thid + 4*offset] += dDVij * dSigma * (1.0 - dDij / dSigma) / (dAlpha * dL * dL);
+		}
 	    }
 	}
       pdFx[nPID] = dFx;

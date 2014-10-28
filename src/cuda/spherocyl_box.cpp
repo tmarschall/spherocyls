@@ -91,30 +91,30 @@ void Spherocyl_Box::set_kernel_configs()
       m_nGridSize = 4;
       m_nBlockSize = 128;
       m_nSM_CalcF = 3*128*sizeof(double);
-      m_nSM_CalcSE = 4*136*sizeof(double);
+      m_nSM_CalcSE = 5*136*sizeof(double);
     case 1024:
       m_nGridSize = 8;  // Grid size (# of thread blocks)
       m_nBlockSize = 128; // Block size (# of threads per block)
       m_nSM_CalcF = 3*128*sizeof(double);
-      m_nSM_CalcSE = 4*136*sizeof(double); // Size of shared memory per block
+      m_nSM_CalcSE = 5*136*sizeof(double); // Size of shared memory per block
       break;
     case 2048:
       m_nGridSize = 16;  // Grid size (# of thread blocks)
       m_nBlockSize = 128; // Block size (# of threads per block)
       m_nSM_CalcF = 3*128*sizeof(double);
-      m_nSM_CalcSE = 4*136*sizeof(double); // Size of shared memory per block
+      m_nSM_CalcSE = 5*136*sizeof(double); // Size of shared memory per block
       break;
     case 4096:
       m_nGridSize = 16;
       m_nBlockSize = 256;
       m_nSM_CalcF = 3*256*sizeof(double);
-      m_nSM_CalcSE = 4*264*sizeof(double);
+      m_nSM_CalcSE = 5*264*sizeof(double);
       break;
     default:
-      m_nGridSize = 32;
+      m_nGridSize = m_nSpherocyls / 256 + (0 ? (m_nSpherocyls % 256 == 0) : 1);
       m_nBlockSize = 256;
       m_nSM_CalcF = 3*256*sizeof(double);
-      m_nSM_CalcSE = 4*264*sizeof(double);
+      m_nSM_CalcSE = 5*264*sizeof(double);
     };
   cout << "Kernel config (spherocyls):\n";
   cout << m_nGridSize << " x " << m_nBlockSize << endl;
@@ -157,11 +157,11 @@ void Spherocyl_Box::construct_defaults()
   
   // Stress, energy, & force data
   cudaHostAlloc((void **)&h_pfSE, 5*sizeof(float), 0);
-  m_pfEnergy = h_pfSE;
-  m_pfPxx = h_pfSE+1;
-  m_pfPyy = h_pfSE+2;
-  m_pfPxy = h_pfSE+3;
-  m_pfPyx = h_pfSE+4;
+  m_pfEnergy = h_pfSE+4;
+  m_pfPxx = h_pfSE;
+  m_pfPyy = h_pfSE+1;
+  m_pfPxy = h_pfSE+2;
+  m_pfPyx = h_pfSE+3;
   m_fP = 0;
   h_pdFx = new double[m_nSpherocyls];
   h_pdFy = new double[m_nSpherocyls];

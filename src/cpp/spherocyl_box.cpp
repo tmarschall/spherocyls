@@ -480,11 +480,19 @@ void SpherocylBox::calc_se_force_pair(int p, int q)
 	    m_psParticles[q].m_dFy -= dFy;
 	    m_psParticles[q].m_dTau += dTauQ;
 	    
+	    double dCxA = s*nxA - 0.5*dDx;
+	    double dCyA = s*nyA - 0.5*dDy;
+	    double dCxB = t*nxB + 0.5*dDx;
+	    double dCyB = t*nxB + 0.5*dDy;
 	    m_dEnergy += dDVij * dSigma * (1.0 - dDij / dSigma) / (2.0 * m_nParticles);
-	    m_dPxx += dFx * dDeltaX / (m_dLx * m_dLy);
-	    m_dPyy += dFy * dDeltaY / (m_dLx * m_dLy);
-	    m_dPxy += dFy * dDeltaX / (m_dLx * m_dLy);
-	    m_dPyx += dFx * dDeltaY / (m_dLx * m_dLy);
+	    m_dPxx += dFx * dCxA / (m_dLx * m_dLy);
+	    m_dPxx -= dFx * dCxB / (m_dLx * m_dLy);
+	    m_dPyy += dFy * dCyA / (m_dLx * m_dLy);
+	    m_dPyy -= dFy * dCyB / (m_dLx * m_dLy);
+	    m_dPxy += dFy * dCxA / (m_dLx * m_dLy);
+	    m_dPxx -= dFy * dCxB / (m_dLx * m_dLy);
+	    m_dPyx += dFx * dCyA / (m_dLx * m_dLy);
+	    m_dPyx -= dFx * dCyB / (m_dLx * m_dLy);
 	    
 	    //cout << "contact between particles " << p << " and " << q << " with forces: ";
 	    //cout << dFx << " " << dFy << " " << dTauP / dMoiP << " " << dTauQ / dMoiQ << endl;
