@@ -746,17 +746,8 @@ void Spherocyl_Box::run_strain(double dStartGamma, double dStopGamma, double dSv
     }
   
   // Save final configuration
-  calculate_stress_energy();
-  cudaMemcpyAsync(h_pdX, d_pdX, m_nSpherocyls*sizeof(double), cudaMemcpyDeviceToHost);
-  cudaMemcpyAsync(h_pdY, d_pdY, m_nSpherocyls*sizeof(double), cudaMemcpyDeviceToHost);
-  cudaMemcpyAsync(h_pfSE, d_pfSE, 5*sizeof(float), cudaMemcpyDeviceToHost);
-  cudaThreadSynchronize();
-  m_fP = 0.5 * (*m_pfPxx + *m_pfPyy);
-  fprintf(m_pOutfSE, "%lu %.7g %.7g %.7g %.7g %.7g &.7g\n", 
-	  nTime, *m_pfEnergy, *m_pfPxx, *m_pfPyy, m_fP, *m_pfPxy, *m_pfPyx);
+  strain_step(nTime, 1, 1);
   fflush(m_pOutfSE);
-  save_positions(nTime);
-  
   fclose(m_pOutfSE);
 }
 
