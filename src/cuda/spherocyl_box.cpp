@@ -678,7 +678,7 @@ void Spherocyl_Box::place_random_0e_spherocyls(int seed, bool bRandAngle)
   if (bRandAngle)
     h_pdPhi[0] = 2*D_PI * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
   else
-    h_pdPhi[0] = - D_PI * 0.25;
+    h_pdPhi[0] = 0;
 
   for (int p = 1; p < m_nSpherocyls; p++) {
     bool bContact = 1;
@@ -726,7 +726,7 @@ void Spherocyl_Box::place_random_spherocyls(int seed, bool bRandAngle)
   if (bRandAngle)
     h_pdPhi[0] = 2*D_PI * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
   else
-    h_pdPhi[0] = - D_PI * 0.25;
+    h_pdPhi[0] = 0;
 
   for (int p = 1; p < m_nSpherocyls; p++) {
     bool bContact = 1;
