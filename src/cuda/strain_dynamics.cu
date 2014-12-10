@@ -114,7 +114,7 @@ __global__ void euler_est_sc(int nSpherocyls, int *pnNPP, int *pnNbrList, double
 	  double sarg = fabs(s);
 	  s = fmin( fmax(s,-1.), 1. );
 	  if (sarg > 1) 
-	    t = fmin( fmax( -(b*s+e)/a, -1.), 1.);
+	    t = fmin( fmax( -(b*s+e)/c, -1.), 1.);
 	  
 	  // Check if they overlap and calculate forces
 	  double dDx = dDeltaX + s*nxA - t*nxB;
@@ -284,7 +284,7 @@ __global__ void euler_est(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL
 	  double sarg = fabs(s);
 	  s = fmin( fmax(s,-1.), 1. );
 	  if (sarg > 1) 
-	    t = fmin( fmax( -(b*s+e)/a, -1.), 1.);
+	    t = fmin( fmax( -(b*s+e)/c, -1.), 1.);
 	  
 	  // Check if they overlap and calculate forces
 	  double dDx = dDeltaX + s*nxA - t*nxB;
@@ -457,7 +457,7 @@ __global__ void heun_corr(int nSpherocyls, int *pnNPP,int *pnNbrList,double dL, 
 	  double sarg = fabs(s);
 	  s = fmin( fmax(s,-1.), 1. );
 	  if (sarg > 1) 
-	    t = fmin( fmax( -(b*s+e)/a, -1.), 1.);
+	    t = fmin( fmax( -(b*s+e)/c, -1.), 1.);
 	  
 	  // Check if they overlap and calculate forces
 	  double dDx = dDeltaX + s*nxA - t*nxB;

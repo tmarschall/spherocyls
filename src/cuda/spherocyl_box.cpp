@@ -98,6 +98,12 @@ void Spherocyl_Box::set_kernel_configs()
       m_nSM_CalcF = 3*128*sizeof(double);
       m_nSM_CalcSE = 5*136*sizeof(double); // Size of shared memory per block
       break;
+    case 1280:
+      m_nGridSize = 10;
+      m_nBlockSize = 128;
+      m_nSM_CalcF = 3*128*sizeof(double);
+      m_nSM_CalcSE = 5*136*sizeof(double);
+      break;
     case 2048:
       m_nGridSize = 16;  // Grid size (# of thread blocks)
       m_nBlockSize = 128; // Block size (# of threads per block)
@@ -271,6 +277,12 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double dRMax, double dA
     break;
   case ZERO_E_ALIGNED:
     place_random_0e_spherocyls(0,0);
+    break;
+  case GRID:
+    place_spherocyl_grid(0,1);
+    break;
+  case GRID_ALIGNED:
+    place_spherocyl_grid(0,0);
     break;
   }
     
@@ -591,7 +603,7 @@ bool Spherocyl_Box::check_for_contacts(int nIndex)
 	double sarg = fabs(s);
 	s = fmin( fmax(s,-1.), 1. );
 	if (sarg > 1) 
-	  t = fmin( fmax( -(b*s+e)/a, -1.), 1.);
+	  t = fmin( fmax( -(b*s+e)/c, -1.), 1.);
 	
 	// Check if they overlap and calculate forces
 	double dDx = dDeltaX + s*nxA - t*nxB;
@@ -645,7 +657,7 @@ bool Spherocyl_Box::check_for_crosses(int nIndex, double dEpsilon)
     double sarg = fabs(s);
     s = fmin( fmax(s,-1.), 1. );
     if (sarg > 1) 
-      t = fmin( fmax( -(b*s+e)/a, -1.), 1.);
+      t = fmin( fmax( -(b*s+e)/c, -1.), 1.);
     
     // Check if they overlap and calculate forces
     double dDx = dDeltaX + s*nxA - t*nxB;
@@ -746,6 +758,74 @@ void Spherocyl_Box::place_random_spherocyls(int seed, bool bRandAngle)
     }
     cout << "Spherocylinder " << p << " placed in " << nTries << " attempts." << endl;
   }
+  cudaMemcpyAsync(d_pdX, h_pdX, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);
+  cudaMemcpyAsync(d_pdY, h_pdY, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);
+  cudaMemcpyAsync(d_pdPhi, h_pdPhi, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);
+  cudaThreadSynchronize();
+  cout << "Data copied to device" << endl;
+
+}
+
+
+void Spherocyl_Box::place_spherocyl_grid(int seed, bool bRandAngle) 
+{
+  double dAspect = (m_dAMax + m_dRMax) / m_dRMax;
+  double dCols = sqrt(m_nSpherocyls/dAspect);
+  int nRows = int(dAspect*dCols);
+  int nCols = int(dCols);
+  double dWidth = m_dL/nCols;
+  double dHeight = m_dL/nRows;
+  if (dWidth < 2*(m_dAMax+m_dRMax) || dHeight < 2*m_dRMax) {
+    cerr << "Error: Spherocylinders will not fit into square grid, chang the number or size of box" << endl;
+    exit(1);
+  }
+
+  srand(time(0) + seed);
+  
+  for (int p = 0; p < m_nSpherocyls; p++) {
+    h_pdR[p] = m_dRMax;
+    h_pdA[p] = m_dAMax;
+    h_pnMemID[p] = p;
+  }
+  cudaMemcpy(d_pdR, h_pdR, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);
+  cudaMemcpyAsync(d_pdA, h_pdA, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);
+  cudaMemcpyAsync(d_pnInitID, h_pnMemID, sizeof(int)*m_nSpherocyls, cudaMemcpyHostToDevice);
+  cudaMemcpyAsync(d_pnMemID, h_pnMemID, sizeof(int)*m_nSpherocyls, cudaMemcpyHostToDevice);
+  cudaThreadSynchronize();
+  
+  double dXOffset = m_dAMax + m_dRMax;
+  double dRWidth = dWidth - 2*dXOffset;
+  double dYOffset = m_dRMax;
+  double dRHeight = dHeight - 2*dYOffset;
+
+  h_pdX[0] = dXOffset + dRWidth* static_cast<double>(rand())/static_cast<double>(RAND_MAX);
+  h_pdY[0] = dYOffset + dRHeight * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
+  if (bRandAngle)
+    h_pdPhi[0] = 2*D_PI * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
+  else
+    h_pdPhi[0] = 0;
+
+  for (int p = 1; p < m_nSpherocyls; p++) {
+    bool bContact = 1;
+    int nTries = 0;
+    int nR = p / nCols;
+    int nC = p % nCols;
+
+    while (bContact) {
+      h_pdX[p] = nC*dWidth + dXOffset + dRWidth * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
+      h_pdY[p] = nR*dHeight + dYOffset + dRHeight * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
+      if (bRandAngle)
+	h_pdPhi[p] = 2*D_PI * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
+      else
+	h_pdPhi[p] = 0;
+	
+
+      bContact = check_for_crosses(p);
+      nTries += 1;
+    }
+    cout << "Spherocylinder " << p << " placed in " << nTries << " attempts." << endl;
+  }
+
   cudaMemcpyAsync(d_pdX, h_pdX, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);
   cudaMemcpyAsync(d_pdY, h_pdY, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);
   cudaMemcpyAsync(d_pdPhi, h_pdPhi, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);

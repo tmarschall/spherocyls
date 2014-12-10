@@ -19,7 +19,7 @@
 #include <string.h>
 
 enum Potential {HARMONIC = 2, HERTZIAN = 5};
-enum initialConfig {RANDOM, RANDOM_ALIGNED, ZERO_E, ZERO_E_ALIGNED};
+enum initialConfig {RANDOM, RANDOM_ALIGNED, ZERO_E, ZERO_E_ALIGNED, GRID, GRID_ALIGNED};
 
 class Spherocyl_Box
 {
@@ -166,6 +166,7 @@ class Spherocyl_Box
 
   void place_random_spherocyls(int seed = 0, bool bRandAngle = 1);
   void place_random_0e_spherocyls(int seed = 0, bool bRandAngle = 1);
+  void place_spherocyl_grid(int seed = 0, bool bRandAngle = 0);
   void find_neighbors();
   void set_back_gamma();
   void reorder_particles();

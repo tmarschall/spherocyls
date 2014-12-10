@@ -455,7 +455,7 @@ void SpherocylBox::calc_se_force_pair(int p, int q)
 	double sarg = fabs(s);
 	s = fmin( fmax(s,-1.), 1. );
 	if (sarg > 1) 
-		t = fmin( fmax( -(b*s+e)/a, -1.), 1.);
+		t = fmin( fmax( -(b*s+e)/c, -1.), 1.);
 	  
 	// Check if they overlap and calculate forces
 	double dDx = dDeltaX + s*nxA - t*nxB;
@@ -578,7 +578,7 @@ bool SpherocylBox::check_particle_contact(int p, int q)
 	double sarg = fabs(s);
 	s = fmin( fmax(s,-1.), 1. );
 	if (sarg > 1) 
-		t = fmin( fmax( -(b*s+e)/a, -1.), 1.);
+		t = fmin( fmax( -(b*s+e)/c, -1.), 1.);
 	  
 	// Check if they overlap and calculate forces
 	double dDx = dDeltaX + s*nxA - t*nxB;
@@ -628,7 +628,7 @@ bool SpherocylBox::check_particle_cross(int p, int q)
 	double sarg = fabs(s);
 	s = fmin( fmax(s,-1.), 1. );
 	if (sarg > 1) 
-		t = fmin( fmax( -(b*s+e)/a, -1.), 1.);
+		t = fmin( fmax( -(b*s+e)/c, -1.), 1.);
 	  
 	// Check if they overlap and calculate forces
 	double dDx = dDeltaX + s*nxA - t*nxB;
@@ -693,55 +693,98 @@ bool SpherocylBox::check_particle_cross(int p)
 
 void SpherocylBox::random_configuration(double dA, double dR, initialConfig config)
 {
-	assert(dA >= 0);
-	assert(dR > 0);
-	m_dAmax = dA;
-	m_dRmax = dR;
-	double dAlpha = dA/dR;
-	double dC = (3*D_PI + 24*dAlpha + 6*D_PI*dAlpha*dAlpha + 8*dAlpha*dAlpha*dAlpha);
-	double dArea = dR*(D_PI*dR + 4*dA);
-	double dI = dR*dR*dR*dR*dC/(6*dArea);
-	double dRC = (8*dAlpha + 6*D_PI*dAlpha*dAlpha + 8*dAlpha*dAlpha*dAlpha)/dC;
-	configure_cells();
-	for (int p = 0; p < m_nParticles; p++) {
-		m_pvNeighbors[p].clear();
-	}	
-	
-	std::srand(time(0));
-	for (int p = 0; p < m_nParticles; p++) {
-		bool bContact = true;
-		int nTries = 0;
-		while (bContact) {
-			nTries += 1;
-			m_psParticles[p].m_dX = m_dLx*double(std::rand())/double(std::numeric_limits<int>::max());
-			m_psParticles[p].m_dY = m_dLy*double(std::rand())/double(std::numeric_limits<int>::max());
-			if (config % 2 == 1) {
-			  m_psParticles[p].m_dPhi = 0;
-			}
-			else {
-			  m_psParticles[p].m_dPhi = 2*D_PI*double(std::rand())/double(std::numeric_limits<int>::max());
-			}
-		       
-			m_psParticles[p].m_dA = dA;
-			m_psParticles[p].m_dR = dR;
-			int nCol = int(m_psParticles[p].m_dX / m_dCellWidth);
-			int nRow = int(m_psParticles[p].m_dY / m_dCellHeight);
-			int nCellID = nCol + nRow * m_nCellCols;
-			m_psParticles[p].m_nCell = nCellID;
-			if (config < 2) {
-			  bContact = check_particle_cross(p);
-			}
-			else {
-			  bContact = check_particle_contact(p);
-			}
-			  
-		}
-		m_pvCells[m_psParticles[p].m_nCell].push_back(p);
-		m_psParticles[p].m_dI = dI;
-		m_psParticles[p].m_dRC = dRC;
-		cout << "Particle " << p << " placed in " << nTries << " tries" << endl;
-	}
+  assert(dA >= 0);
+  assert(dR > 0);
+  m_dAmax = dA;
+  m_dRmax = dR;
+  double dAlpha = dA/dR;
+  double dC = (3*D_PI + 24*dAlpha + 6*D_PI*dAlpha*dAlpha + 8*dAlpha*dAlpha*dAlpha);
+  double dArea = dR*(D_PI*dR + 4*dA);
+  double dI = dR*dR*dR*dR*dC/(6*dArea);
+  double dRC = (8*dAlpha + 6*D_PI*dAlpha*dAlpha + 8*dAlpha*dAlpha*dAlpha)/dC;
+  configure_cells();
+  for (int p = 0; p < m_nParticles; p++) {
+    m_pvNeighbors[p].clear();
+  }	
+  
+  int nRows;
+  int nCols;
+  double dWidth;
+  double dHeight;
+  double dXOffset = dA + dR;
+  double dYOffset = dR;
+  double dRWidth;
+  double dRHeight;
+  if (config > 3) {
+    double dAspect = (dA + dR) / dR;
+    if (m_dLx == m_dLy) {
+      double dCols = sqrt(m_nParticles/dAspect);
+      nRows = int(dAspect*dCols);
+      nCols = int(dCols);
+    }
+    else {
+      nRows = int(0.5*m_dLx/(dA+dR));
+      nCols = m_nParticles/nRows + 0 ? m_nParticles % nRows == 0 : 1;
+    }
+    dWidth = m_dLx/nCols;
+    dHeight = m_dLy/nRows;
+    if (dWidth < 2*(dA+dR) || dHeight < 2*dR) {
+      std::cerr << "Error: Spherocylinders will not fit into square grid, chang the number or size of box" << endl;
+      exit(1);
+    }
+    dRWidth = dWidth - 2*dXOffset;
+    dRHeight = dHeight - 2*dYOffset;
+  }
 
-	m_dPacking = calculate_packing_fraction();
-	find_neighbors();
+  std::srand(time(0));
+  for (int p = 0; p < m_nParticles; p++) {
+    bool bContact = true;
+    int nTries = 0;
+    int nR;
+    int nC;
+    if (config > 3) {
+      nR = p / nCols;
+      nC = p % nCols;
+    }
+
+    while (bContact) {
+      nTries += 1;
+      if (config < 4) {
+	m_psParticles[p].m_dX = m_dLx*double(std::rand())/double(std::numeric_limits<int>::max());
+	m_psParticles[p].m_dY = m_dLy*double(std::rand())/double(std::numeric_limits<int>::max());
+      }
+      else {
+	m_psParticles[p].m_dX = nC*dWidth + dXOffset + dRWidth*double(std::rand())/double(std::numeric_limits<int>::max());
+	m_psParticles[p].m_dY = nR*dHeight + dYOffset + dRHeight*double(std::rand())/double(std::numeric_limits<int>::max());
+      }
+	
+      if (config % 2 == 1) {
+	m_psParticles[p].m_dPhi = 0;
+      }
+      else {
+	m_psParticles[p].m_dPhi = 2*D_PI*double(std::rand())/double(std::numeric_limits<int>::max());
+      }
+      
+      m_psParticles[p].m_dA = dA;
+      m_psParticles[p].m_dR = dR;
+      int nCol = int(m_psParticles[p].m_dX / m_dCellWidth);
+      int nRow = int(m_psParticles[p].m_dY / m_dCellHeight);
+      int nCellID = nCol + nRow * m_nCellCols;
+      m_psParticles[p].m_nCell = nCellID;
+      if (config < 2) {
+	bContact = check_particle_cross(p);
+      }
+      else {
+	bContact = check_particle_contact(p);
+      }
+      
+    }
+    m_pvCells[m_psParticles[p].m_nCell].push_back(p);
+    m_psParticles[p].m_dI = dI;
+    m_psParticles[p].m_dRC = dRC;
+    cout << "Particle " << p << " placed in " << nTries << " tries" << endl;
+  }
+  
+  m_dPacking = calculate_packing_fraction();
+  find_neighbors();
 }
