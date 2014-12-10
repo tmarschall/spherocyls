@@ -4,4 +4,6 @@
 exe/*
 !exe/.gitkeep
 **~
+input/*
+!input/.gitkeep
 
