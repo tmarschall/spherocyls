@@ -6,4 +6,5 @@ exe/*
 **~
 input/*
 !input/.gitkeep
+!imput/*.txt
 
