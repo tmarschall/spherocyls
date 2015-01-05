@@ -95,6 +95,8 @@ int main(int argc, char* argv[])
   double *dA = new double[nSpherocyls];
   double dRMax = 0.0;
   double dAMax = 0.0;
+  double dAspect = 4;
+  double dBidispersity = 1;
   double dGamma;
   double dTotalGamma;
   long unsigned int nTime = 0;
@@ -104,21 +106,23 @@ int main(int argc, char* argv[])
   {
     double dPacking = float_input(argc, argv, ++argn, "Packing Fraction");
     cout << dPacking << endl;
-    double dA = float_input(argc, argv, ++argn, "Half-shaft length");
-    cout << dA << endl;
-    double dR = float_input(argc, argv, ++argn, "Radius");
-    cout << dR << endl;
+    dAspect = float_input(argc, argv, ++argn, "Aspect ratio (i.e. A/R or 2A/D):");
+    cout << dAspect << endl;
+    dBidispersity = float_input(argc, argv, ++argn, "Bidispersity ratio: (1 for monodisperse):");
+    cout << dBidispersity << endl;
     if (argc > ++argn) {
       config = (initialConfig)int_input(argc, argv, argn, "Initial configuration (0: random, 1: random-aligned, 2: zero-energy, 3: zero-energy-aligned)");
     }
     else {
       config = RANDOM;
     }
-    double dArea = nSpherocyls*(4*dA + D_PI * dR)*dR;
+    double dR = 0.5;
+    double dA = dAspect*dR;
+    double dArea = 0.5*nSpherocyls*(1+dBidispersity*dBidispersity)*(4*dA + D_PI * dR)*dR;
     dL = sqrt(dArea / dPacking);
     cout << "Box length L: " << dL << endl;
-    dRMax = dR;
-    dAMax = dA;
+    dRMax = dBidispersity*dR;
+    dAMax = dBidispersity*dA;
     /*
     srand(time(0) + static_cast<int>(1000*dPacking));
     for (int p = 0; p < nSpherocyls; p++)
@@ -173,7 +177,7 @@ int main(int argc, char* argv[])
   Spherocyl_Box *cSpherocyls;
   if (strFile == "r") {
     cout << "Initializing box of length " << dL << " with " << nSpherocyls << " particles.";
-    cSpherocyls = new Spherocyl_Box(nSpherocyls, dL, dRMax, dAMax, config, dDR);
+    cSpherocyls = new Spherocyl_Box(nSpherocyls, dL, dAspect, dBidispersity, config, dDR);
   }
   else {
     cout << "Initializing box from file of length " << dL << " with " << nSpherocyls << " particles.";

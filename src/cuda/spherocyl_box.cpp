@@ -219,7 +219,7 @@ double Spherocyl_Box::calculate_packing()
 
 // Creates the class
 // See spherocyl_box.h for default values of parameters
-Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double dRMax, double dAMax, initialConfig config, double dEpsilon, int nMaxPPC, int nMaxNbrs, Potential ePotential)
+Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double dAspect, double dBidispersity, initialConfig config, double dEpsilon, int nMaxPPC, int nMaxNbrs, Potential ePotential)
 {
   assert(nSpherocyls > 0);
   m_nSpherocyls = nSpherocyls;
@@ -230,8 +230,13 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double dRMax, double dA
   m_dEpsilon = dEpsilon;
   m_nMaxPPC = nMaxPPC;
   m_nMaxNbrs = nMaxNbrs;
-  m_dRMax = dRMax;
-  m_dAMax = dAMax;
+  if (dBidispersity >= 1) {
+    m_dRMax = 0.5*dBidispersity;
+  }
+  else {
+    m_dRMax = 0.5;
+  }
+  m_dAMax = m_dRMax*dAspect;
   m_nDeviceMem = 0;
 
   // This allocates the coordinate data as page-locked memory, which
@@ -267,16 +272,16 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double dRMax, double dA
   cout << "Memory allocated on device (MB): " << (double)m_nDeviceMem / (1024.*1024.) << endl;
   switch (config) {
   case RANDOM:
-    place_random_spherocyls(0,1);
+    place_random_spherocyls(0,1,dBidispersity);
     break;
   case RANDOM_ALIGNED:
-    place_random_spherocyls(0,0);
+    place_random_spherocyls(0,0,dBidispersity);
     break;
   case ZERO_E:
-    place_random_0e_spherocyls(0,1);
+    place_random_0e_spherocyls(0,1,dBidispersity);
     break;
   case ZERO_E_ALIGNED:
-    place_random_0e_spherocyls(0,0);
+    place_random_0e_spherocyls(0,0,dBidispersity);
     break;
   case GRID:
     place_spherocyl_grid(0,1);
@@ -670,13 +675,18 @@ bool Spherocyl_Box::check_for_crosses(int nIndex, double dEpsilon)
   return 0;
 }
 
-void Spherocyl_Box::place_random_0e_spherocyls(int seed, bool bRandAngle)
+void Spherocyl_Box::place_random_0e_spherocyls(int seed, bool bRandAngle, double dBidispersity)
 {
   srand(time(0) + seed);
 
+  double dAspect = m_dAMax / m_dRMax;
+  double dR = 0.5;
+  double dA = dAspect * dR;
+  double dRDiff = (dBidispersity-1) * dR;
+  double dADiff = (dBidispersity-1) * dA;
   for (int p = 0; p < m_nSpherocyls; p++) {
-    h_pdR[p] = m_dRMax;
-    h_pdA[p] = m_dAMax;
+    h_pdR[p] = dR + (p%2)*dRDiff;
+    h_pdA[p] = dA + (p%2)*dADiff;
     h_pnMemID[p] = p;
   }
   cudaMemcpy(d_pdR, h_pdR, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);
@@ -718,13 +728,18 @@ void Spherocyl_Box::place_random_0e_spherocyls(int seed, bool bRandAngle)
 
 }
 
-void Spherocyl_Box::place_random_spherocyls(int seed, bool bRandAngle)
+void Spherocyl_Box::place_random_spherocyls(int seed, bool bRandAngle, double dBidispersity)
 {
   srand(time(0) + seed);
 
+  double dAspect = m_dAMax / m_dRMax;
+  double dR = 0.5;
+  double dA = dAspect * dR;
+  double dRDiff = (dBidispersity-1) * dR;
+  double dADiff = (dBidispersity-1) * dA;
   for (int p = 0; p < m_nSpherocyls; p++) {
-    h_pdR[p] = m_dRMax;
-    h_pdA[p] = m_dAMax;
+    h_pdR[p] = dR + (p%2)*dRDiff;
+    h_pdA[p] = dA + (p%2)*dADiff;
     h_pnMemID[p] = p;
   }
   cudaMemcpy(d_pdR, h_pdR, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);

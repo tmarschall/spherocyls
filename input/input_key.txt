@@ -16,9 +16,11 @@ The order of the arguments for spherocyl_strain are:
 8) How often to save the stress tensor components and energy (float)
 9) A padding number which determines how often new neighbor lists need to be generated (too small or too big and the program may run slow, I usually use around 0.1)
 10) The packing fraction (only necessary when using a random configuration)
-11) The spherocylinder half-shaft length (only necessary when using a random configuration)
-12) The spherocylinder radius (only necessary when using a random configuration)
+11) The spherocylinder aspect ratio (A/R, where the base for R is 0.5)
+12) The bidispersity (R2/R1, where the base for R1 is 0.5)
+13) The type of random configuration (0: random, 1: random aligned, 2: zero-energy, 3: zero-energy aligned, 4: grid, 5: grid aligned)
 
+Arguments 10-13 are ignored when starting from a previous configuration, since they are determined by the configuration.
 
 The arguments for spherocyl_resize are the same except:
 

@@ -156,7 +156,7 @@ class Spherocyl_Box
   void strain_step(long unsigned int nTime, bool bSvStress = 0, bool bSvPos = 0);
 
  public:
-  Spherocyl_Box(int nSpherocyls, double dL, double dRMax, double dAMax, 
+  Spherocyl_Box(int nSpherocyls, double dL, double dAspect, double dBidispersity, 
 		initialConfig config, double dEpsilon = 0.1,  int nMaxPPC = 15, 
 		int nMaxNbrs = 35, Potential ePotential = HARMONIC);
   Spherocyl_Box(int nSpherocyls, double dL, double *pdX, double *pdY, 
@@ -164,8 +164,8 @@ class Spherocyl_Box
 		int nMaxPPC = 15, int nMaxNbrs = 35, Potential ePotential = HARMONIC);
   ~Spherocyl_Box();
 
-  void place_random_spherocyls(int seed = 0, bool bRandAngle = 1);
-  void place_random_0e_spherocyls(int seed = 0, bool bRandAngle = 1);
+  void place_random_spherocyls(int seed = 0, bool bRandAngle = 1, double dBidispersity = 1);
+  void place_random_0e_spherocyls(int seed = 0, bool bRandAngle = 1, double dBidispersity = 1);
   void place_spherocyl_grid(int seed = 0, bool bRandAngle = 0);
   void find_neighbors();
   void set_back_gamma();
