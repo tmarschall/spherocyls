@@ -102,6 +102,7 @@ int main(int argc, char* argv[])
   long unsigned int nTime = 0;
   double dPacking;
   initialConfig config;
+  Config sConfig;
   if (strFile == "r")
   {
     double dPacking = float_input(argc, argv, ++argn, "Packing Fraction");
@@ -110,11 +111,35 @@ int main(int argc, char* argv[])
     cout << dAspect << endl;
     dBidispersity = float_input(argc, argv, ++argn, "Bidispersity ratio: (1 for monodisperse):");
     cout << dBidispersity << endl;
-    if (argc > ++argn) {
-      config = (initialConfig)int_input(argc, argv, argn, "Initial configuration (0: random, 1: random-aligned, 2: zero-energy, 3: zero-energy-aligned)");
+    if (argc > argn) {
+      config = (initialConfig)int_input(argc, argv, ++argn, "Initial configuration (0: random, 1: random-aligned, 2: zero-energy, 3: zero-energy-aligned, 4: grid, 5: grid-aligned, 6: other-specified)");
+      if (config == 6) {
+	sConfig.type = (configType)int_input(argc, argv, ++argn, "Configuration type (0: random, 1: grid)");
+	sConfig.minAngle = float_input(argc, argv, ++argn, "Minimum angle");
+	sConfig.maxAngle = float_input(argc, argv, ++argn, "Maximum angle");
+	sConfig.overlap = float_input(argc, argv, ++argn, "Allowed overlap (min 0, max 1)");
+      }
+      else {
+	if (config < 4)
+	  sConfig.type = RANDOM;
+	else
+	  sConfig.type = GRID;
+	sConfig.minAngle = 0;
+	if (config % 2 == 1)
+	  sConfig.maxAngle = 0;
+	else
+	  sConfig.maxAngle = D_PI;
+	if (config >= 2 && config < 4)
+	  sConfig.overlap = 0;
+	else
+	  sConfig.overlap = 1;
+      }
     }
     else {
-      config = RANDOM;
+      sConfig.type = RANDOM;
+      sConfig.minAngle = 0;
+      sConfig.maxAngle = D_PI;
+      sConfig.overlap = 1;
     }
     double dR = 0.5;
     double dA = dAspect*dR;
@@ -177,7 +202,7 @@ int main(int argc, char* argv[])
   Spherocyl_Box *cSpherocyls;
   if (strFile == "r") {
     cout << "Initializing box of length " << dL << " with " << nSpherocyls << " particles.";
-    cSpherocyls = new Spherocyl_Box(nSpherocyls, dL, dAspect, dBidispersity, config, dDR);
+    cSpherocyls = new Spherocyl_Box(nSpherocyls, dL, dAspect, dBidispersity, sConfig, dDR);
   }
   else {
     cout << "Initializing box from file of length " << dL << " with " << nSpherocyls << " particles.";

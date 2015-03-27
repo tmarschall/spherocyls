@@ -19,7 +19,14 @@
 #include <string.h>
 
 enum Potential {HARMONIC = 2, HERTZIAN = 5};
-enum initialConfig {RANDOM, RANDOM_ALIGNED, ZERO_E, ZERO_E_ALIGNED, GRID, GRID_ALIGNED};
+enum initialConfig {RANDOM_UNALIGNED, RANDOM_ALIGNED, ZERO_E_UNALIGNED, ZERO_E_ALIGNED, GRID_UNALIGNED, GRID_ALIGNED, OTHER};
+enum configType {RANDOM, GRID};
+struct Config {
+  configType type;
+  double minAngle;
+  double maxAngle;
+  double overlap;
+};
 
 class Spherocyl_Box
 {
@@ -157,7 +164,7 @@ class Spherocyl_Box
 
  public:
   Spherocyl_Box(int nSpherocyls, double dL, double dAspect, double dBidispersity, 
-		initialConfig config, double dEpsilon = 0.1,  int nMaxPPC = 15, 
+		Config config, double dEpsilon = 0.1,  int nMaxPPC = 15, 
 		int nMaxNbrs = 35, Potential ePotential = HARMONIC);
   Spherocyl_Box(int nSpherocyls, double dL, double *pdX, double *pdY, 
 		double *pdPhi, double *pdR, double *pdA, double dEpsilon = 0.1,
@@ -167,13 +174,14 @@ class Spherocyl_Box
   void place_random_spherocyls(int seed = 0, bool bRandAngle = 1, double dBidispersity = 1);
   void place_random_0e_spherocyls(int seed = 0, bool bRandAngle = 1, double dBidispersity = 1);
   void place_spherocyl_grid(int seed = 0, bool bRandAngle = 0);
+  void place_spherocyls(Config config, int seed = 0, double dBidispersity = 1);
   void find_neighbors();
   void set_back_gamma();
   void reorder_particles();
   void reset_IDs();
   void calculate_stress_energy();
   bool check_for_contacts();
-  bool check_for_contacts(int nIndex);
+  bool check_for_contacts(int nIndex, double dTol = 0);
   bool check_for_crosses(int nIndex, double dEpsilon = 1e-5);
   void run_strain(double dStartGam, double dStopGam, double dSvStressGam, double dSvPosGam);
   void run_strain(long unsigned int nSteps);
