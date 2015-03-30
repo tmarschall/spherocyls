@@ -82,8 +82,8 @@ int main(int argc, char* argv[])
   double dDR = float_input(argc, argv, ++argn, "Cell padding");
   cout << dDR << endl;
 
-  if (fabs(dStressSaveRate) < fabs(dEpsilon)) {
-	  dStressSaveRate = dEpsilon;
+  if (fabs(dStressSaveRate) < fabs(dResizeRate)) {
+	  dStressSaveRate = dResizeRate;
   }
   if (fabs(dPosSaveRate) < fabs(dStressSaveRate)) {
 	  dPosSaveRate = dStressSaveRate;
