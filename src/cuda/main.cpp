@@ -81,7 +81,7 @@ int main(int argc, char* argv[])
   cout << dStressSaveRate << endl;
   double dDR = float_input(argc, argv, ++argn, "Cell padding");
   cout << dDR << endl;
-  bool bFlipShear = (bool)int_input(argc, argv, ++argn, "Reverse shear direction (1 to reverse):");
+  bool bFlipShear = (bool)int_input(argc, argv, ++argn, "Reverse shear direction (1 to reverse)");
   cout << bFlipShear << endl;
 
   if (dStressSaveRate < dStrainRate * dStep)
@@ -109,9 +109,9 @@ int main(int argc, char* argv[])
   {
     double dPacking = float_input(argc, argv, ++argn, "Packing Fraction");
     cout << dPacking << endl;
-    dAspect = float_input(argc, argv, ++argn, "Aspect ratio (i.e. A/R or 2A/D):");
+    dAspect = float_input(argc, argv, ++argn, "Aspect ratio (i.e. A/R or 2A/D)");
     cout << dAspect << endl;
-    dBidispersity = float_input(argc, argv, ++argn, "Bidispersity ratio: (1 for monodisperse):");
+    dBidispersity = float_input(argc, argv, ++argn, "Bidispersity ratio: (1 for monodisperse)");
     cout << dBidispersity << endl;
     if (argc > argn) {
       config = (initialConfig)int_input(argc, argv, ++argn, "Initial configuration (0: random, 1: random-aligned, 2: zero-energy, 3: zero-energy-aligned, 4: grid, 5: grid-aligned, 6: other-specified)");

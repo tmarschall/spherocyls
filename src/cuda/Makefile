@@ -28,7 +28,7 @@ RESZ=../../exe/resize_box
 
 #rules:
 
-all: $(EXE) $(RESZ) #$(PROF_EXE)
+all: $(EXE) $(RESZ)
 strain: $(EXE)
 resize: $(RESZ)
 #prof: $(PROF_EXE)
