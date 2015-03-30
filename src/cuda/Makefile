@@ -23,12 +23,14 @@ NVCCOBJECTS=find_neighbors.o calculate_stress_energy.o data_primitives_2.o strai
 
 # final executable
 EXE=../../exe/spherocyl_box
+RESZ=../../exe/resize_box
 #PROF_EXE=../../exe/spherocyl_box_profile
 
 #rules:
 
-all: $(EXE) $(PROF_EXE)
+all: $(EXE) $(RESZ) #$(PROF_EXE)
 strain: $(EXE)
+resize: $(RESZ)
 #prof: $(PROF_EXE)
 
 ######################
@@ -37,9 +39,12 @@ strain: $(EXE)
 
 $(EXE): $(CXXOBJECTS) $(NVCCOBJECTS) main.o
 	$(CXX) -o $(EXE) main.o $(CXXOBJECTS) $(NVCCOBJECTS) $(LDFLAGS)
+	
+$(RESZ): $(CXXOBJECTS) $(NVCCOBJECTS) main_resize.o
+	$(CXX) -o $(EXE) main_resize.o $(CXXOBJECTS) $(NVCCOBJECTS) $(LDFLAGS)
 
-$(PROF_EXE): $(CXXOBJECTS) $(NVCCOBJECTS) main_profile.o
-	$(CXX) -o $(PROF_EXE) main_profile.o $(CXXOBJECTS) $(NVCCOBJECTS) $(LDFLAGS)
+#$(PROF_EXE): $(CXXOBJECTS) $(NVCCOBJECTS) main_profile.o
+#	$(CXX) -o $(PROF_EXE) main_profile.o $(CXXOBJECTS) $(NVCCOBJECTS) $(LDFLAGS)
 
 ###################
 # compile objects #
@@ -48,6 +53,9 @@ $(PROF_EXE): $(CXXOBJECTS) $(NVCCOBJECTS) main_profile.o
 #c++ files
 main.o: main.cpp spherocyl_box.h
 	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -c main.cpp
+	
+main_resize.o: main_resize.cpp spherocyl_box.h
+	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -c main_resize.cpp
 
 #main_profile.o: main_profile.cpp spherocyl_box.h
 #	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -c main_profile.cpp
@@ -62,13 +70,13 @@ dat_file_input.o: file_input.h dat_file_input.cpp
 	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -c dat_file_input.cpp
 
 #cuda files
-find_neighbors.o: spherocyl_box.h data_primitives.h find_neighbors.cu
+find_neighbors.o: spherocyl_box.h data_primitives.h cudaErr.h find_neighbors.cu
 	$(NVCC) $(NVCCFLAGS) $(CUDAINCLUDE) -c find_neighbors.cu
 
-calculate_stress_energy.o: spherocyl_box.h calculate_stress_energy.cu
+calculate_stress_energy.o: spherocyl_box.h cudaErr.h calculate_stress_energy.cu
 	$(NVCC) $(NVCCFLAGS) $(CUDAINCLUDE) -c calculate_stress_energy.cu
 
-strain_dynamics.o: spherocyl_box.h strain_dynamics.cu
+strain_dynamics.o: spherocyl_box.h cudaErr.h strain_dynamics.cu
 	$(NVCC) $(NVCCFLAGS) $(CUDAINCLUDE) -c strain_dynamics.cu
 
 data_primitives_2.o: data_primitives.h

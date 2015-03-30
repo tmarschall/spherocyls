@@ -543,7 +543,7 @@ __global__ void reflect_yaxis(int nParticles, double *pdX, double *pdPhi, double
 	int nPID = threadIdx.x + blockDim.x*blockIdx.x;
 	int nThreads = blockDim.x * gridDim.x;
 
-	while (thid < nParticles) {
+	while (nPID < nParticles) {
 		pdX[nPID] = dLx - pdX[nPID];
 		pdPhi[nPID] = -pdPhi[nPID];
 		nPID += nThreads;
