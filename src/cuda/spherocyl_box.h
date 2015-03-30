@@ -187,7 +187,7 @@ class Spherocyl_Box
   bool check_for_crosses(int nIndex, double dEpsilon = 1e-5);
   void run_strain(double dStartGam, double dStopGam, double dSvStressGam, double dSvPosGam);
   void run_strain(long unsigned int nSteps);
-  void resize_box(long unsigned int nStart, double dEpsilon, double dFinalPacking, unsigned int nSvStressInt, unsigned int nSvPosInt);
+  void resize_box(long unsigned int nStart, double dEpsilon, double dFinalPacking, double SvStressRate, double dSvPosRate);
   
 #if GOLD_FUNCS == 1
   void calculate_stress_energy_gold();

@@ -764,10 +764,10 @@ void Spherocyl_Box::run_strain(long unsigned int nSteps)
 }
 
 
-__global__ void resize_coords(int nParticles, double dEpsilon, double pdX, double pdY)
+__global__ void resize_coords(int nParticles, double dEpsilon, double *pdX, double *pdY)
 {
 	int nPID = threadIdx.x + blockIdx.x*blockDim.x;
-	int nThreads = blockDim.x*girdDim.x;
+	int nThreads = blockDim.x*gridDim.x;
 
 	while (nPID < nParticles) {
 		pdX[nPID] += dEpsilon*pdX[nPID];
@@ -777,7 +777,7 @@ __global__ void resize_coords(int nParticles, double dEpsilon, double pdX, doubl
 	}
 }
 
-void Spherocyl_Box::resize_step(long unsigned int tTime, double dEpsilon, bool bSvStress, bool bSavePos)
+void Spherocyl_Box::resize_step(long unsigned int tTime, double dEpsilon, bool bSvStress, bool bSvPos)
 {
 	resize_coords <<<m_nGridSize, m_nBlockSize>>> (m_nSpherocyls, dEpsilon, d_pdX, d_pdY);
 	m_dL += dEpsilon*m_dL;
@@ -924,7 +924,7 @@ void Spherocyl_Box::resize_box(long unsigned int nStart, double dEpsilon, double
 	FILE *pOutfRs;
 	if (nTime == 0) {
 		pOutfRs = fopen(szRsSE, "w");
-		if (pOutfrs == NULL) {
+		if (pOutfRs == NULL) {
 			fprintf(stderr, "Could not open file for writing");
 			exit(1);
 		}
@@ -953,15 +953,15 @@ void Spherocyl_Box::resize_box(long unsigned int nStart, double dEpsilon, double
 	}
 
 	int nSaveStressInt = int(log(1+dSvStressRate)/log(1+dEpsilon));
-	int nSavePosInt = int(dSvPosRate/dSvStressRate+0.5)*nSaveStressRate;
+	int nSavePosInt = int(dSvPosRate/dSvStressRate+0.5)*nSaveStressInt;
 	printf("Starting resize with rate: %g\nStress save rate: %g (%d)\nPosition save rate: %g (%d)\n",
 			dEpsilon, dSvStressRate, nSaveStressInt, dSvPosRate, nSavePosInt);
 	while (dEpsilon*(dFinalPacking - m_dPacking) > dEpsilon*dEpsilon) {
 		bool bSavePos = (nTime % nSavePosInt == 0);
 		bool bSaveStress = (nTime % nSaveStressInt == 0);
-		resize_step(nTime, dEpsilon, pOutfSE, bSaveStress, bSavePos);
+		resize_step(nTime, dEpsilon, bSaveStress, bSavePos);
 		if (bSaveStress) {
-			fprintf(m_pOutfRs, "%.6g %.7g %.7g %.7g %.7g %.7g %.7g\n",
+			fprintf(pOutfRs, "%.6g %.7g %.7g %.7g %.7g %.7g %.7g\n",
 					m_dPacking, *m_pfEnergy, *m_pfPxx, *m_pfPyy, m_fP, *m_pfPxy, *m_pfPyx);
 		}
 
@@ -974,9 +974,9 @@ void Spherocyl_Box::resize_box(long unsigned int nStart, double dEpsilon, double
 		//if (nTime % nReorderInterval == 0)
 		//reorder_particles();
 	}
-	resize_step(nTime, dEpsilon, pOutfSE, 1, 1);
-	fprintf(m_pOutfRs, "%.6g %.7g %.7g %.7g %.7g %.7g %.7g\n", m_dPacking, *m_pfEnergy, *m_pfPxx, *m_pfPyy, m_fP, *m_pfPxy, *m_pfPyx);
-	fclose(pOutfSE);
+	resize_step(nTime, dEpsilon, 1, 1);
+	fprintf(pOutfRs, "%.6g %.7g %.7g %.7g %.7g %.7g %.7g\n", m_dPacking, *m_pfEnergy, *m_pfPxx, *m_pfPyy, m_fP, *m_pfPxy, *m_pfPyx);
+	fclose(m_pOutfSE);
 	fclose(pOutfRs);
 
 }
