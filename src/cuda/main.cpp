@@ -203,11 +203,11 @@ int main(int argc, char* argv[])
 
   Spherocyl_Box *cSpherocyls;
   if (strFile == "r") {
-    cout << "Initializing box of length " << dL << " with " << nSpherocyls << " particles.";
+    cout << "Initializing box of length " << dL << " with " << nSpherocyls << " particles.\n";
     cSpherocyls = new Spherocyl_Box(nSpherocyls, dL, dAspect, dBidispersity, sConfig, dDR);
   }
   else {
-    cout << "Initializing box from file of length " << dL << " with " << nSpherocyls << " particles.";
+    cout << "Initializing box from file of length " << dL << " with " << nSpherocyls << " particles.\n";
     cSpherocyls = new Spherocyl_Box(nSpherocyls, dL, dX, dY, dPhi, dRad, dA, dDR);
   }
   cout << "Spherocyls initialized" << endl;

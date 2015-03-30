@@ -3,7 +3,7 @@ CXX=g++
 NVCC=nvcc
 
 # paths of cuda libraries
-CUDAPATH=/software/cuda/5.5/b1
+CUDAPATH=/software/cuda/6.5
 # for cudpp:
 #CUDASDKPATH=/usr/local/cuda/SDK/NVIDIA_GPU_Computing_SDK/C
 
