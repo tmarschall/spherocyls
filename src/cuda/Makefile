@@ -41,7 +41,7 @@ $(EXE): $(CXXOBJECTS) $(NVCCOBJECTS) main.o
 	$(CXX) -o $(EXE) main.o $(CXXOBJECTS) $(NVCCOBJECTS) $(LDFLAGS)
 	
 $(RESZ): $(CXXOBJECTS) $(NVCCOBJECTS) main_resize.o
-	$(CXX) -o $(RSZ) main_resize.o $(CXXOBJECTS) $(NVCCOBJECTS) $(LDFLAGS)
+	$(CXX) -o $(RESZ) main_resize.o $(CXXOBJECTS) $(NVCCOBJECTS) $(LDFLAGS)
 
 #$(PROF_EXE): $(CXXOBJECTS) $(NVCCOBJECTS) main_profile.o
 #	$(CXX) -o $(PROF_EXE) main_profile.o $(CXXOBJECTS) $(NVCCOBJECTS) $(LDFLAGS)
