@@ -23,7 +23,7 @@ NVCCOBJECTS=find_neighbors.o calculate_stress_energy.o data_primitives_2.o strai
 
 # final executable
 EXE=../../exe/spherocyl_box
-RESZ=../../exe/resize_box
+RESZ=../../exe/spherocyl_resize
 #PROF_EXE=../../exe/spherocyl_box_profile
 
 #rules:
@@ -41,7 +41,7 @@ $(EXE): $(CXXOBJECTS) $(NVCCOBJECTS) main.o
 	$(CXX) -o $(EXE) main.o $(CXXOBJECTS) $(NVCCOBJECTS) $(LDFLAGS)
 	
 $(RESZ): $(CXXOBJECTS) $(NVCCOBJECTS) main_resize.o
-	$(CXX) -o $(EXE) main_resize.o $(CXXOBJECTS) $(NVCCOBJECTS) $(LDFLAGS)
+	$(CXX) -o $(RSZ) main_resize.o $(CXXOBJECTS) $(NVCCOBJECTS) $(LDFLAGS)
 
 #$(PROF_EXE): $(CXXOBJECTS) $(NVCCOBJECTS) main_profile.o
 #	$(CXX) -o $(PROF_EXE) main_profile.o $(CXXOBJECTS) $(NVCCOBJECTS) $(LDFLAGS)
