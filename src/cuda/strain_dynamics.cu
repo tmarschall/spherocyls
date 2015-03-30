@@ -763,3 +763,223 @@ void Spherocyl_Box::run_strain(long unsigned int nSteps)
 
 }
 
+
+__global__ void resize_coords(int nParticles, double dEpsilon, double pdX, double pdY)
+{
+	int nPID = threadIdx.x + blockIdx.x*blockDim.x;
+	int nThreads = blockDim.x*girdDim.x;
+
+	while (nPID < nParticles) {
+		pdX[nPID] += dEpsilon*pdX[nPID];
+		pdY[nPID] += dEpsilon*pdY[nPID];
+
+		nPID += nThreads;
+	}
+}
+
+void Spherocyl_Box::resize_step(long unsigned int tTime, double dEpsilon, bool bSvStress, bool bSavePos)
+{
+	resize_coords <<<m_nGridSize, m_nBlockSize>>> (m_nSpherocyls, dEpsilon, d_pdX, d_pdY);
+	m_dL += dEpsilon*m_dL;
+	m_dPacking = calculate_packing();
+	cudaThreadSynchronize();
+	checkCudaError("Resizing box");
+
+	if (bSvStress)
+	    {
+	      cudaMemset((void *) d_pfSE, 0, 5*sizeof(float));
+
+	      switch (m_ePotential)
+		{
+		case HARMONIC:
+		  euler_est <HARMONIC, 1> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
+		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dL, m_dGamma, 0,
+		     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, d_pdFx,
+		     d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
+		  break;
+		case HERTZIAN:
+		  euler_est <HERTZIAN, 1> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
+		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dL, m_dGamma, 0,
+		     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, d_pdFx,
+		     d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
+		}
+	      cudaThreadSynchronize();
+	      checkCudaError("Estimating new particle positions, calculating stresses");
+
+	      cudaMemcpyAsync(h_pfSE, d_pfSE, 5*sizeof(float), cudaMemcpyDeviceToHost);
+	      if (bSvPos)
+		{
+		  cudaMemcpyAsync(h_pdX, d_pdX, m_nSpherocyls*sizeof(double), cudaMemcpyDeviceToHost);
+		  cudaMemcpyAsync(h_pdY, d_pdY, m_nSpherocyls*sizeof(double), cudaMemcpyDeviceToHost);
+		  cudaMemcpyAsync(h_pdPhi, d_pdPhi, m_nSpherocyls*sizeof(double), cudaMemcpyDeviceToHost);
+		}
+	      cudaThreadSynchronize();
+	    }
+	  else
+	    {
+	      switch (m_ePotential)
+		{
+		case HARMONIC:
+		  euler_est <HARMONIC, 0> <<<m_nGridSize, m_nBlockSize>>>
+		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dL, m_dGamma, 0,
+		     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
+		     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
+		  break;
+		case HERTZIAN:
+		  euler_est <HERTZIAN, 0> <<<m_nGridSize, m_nBlockSize>>>
+		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dL, m_dGamma, 0,
+		     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
+		     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
+		}
+	      cudaThreadSynchronize();
+	      checkCudaError("Estimating new particle positions");
+	    }
+
+	  switch (m_ePotential)
+	    {
+	    case HARMONIC:
+	      heun_corr <HARMONIC> <<<m_nGridSize, m_nBlockSize>>>
+		(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dL, m_dGamma, 0,
+		 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
+		 d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, d_pdTempPhi, d_pdXMoved,
+		 d_pdYMoved, m_dEpsilon, d_bNewNbrs);
+	      break;
+	    case HERTZIAN:
+	      heun_corr <HERTZIAN> <<<m_nGridSize, m_nBlockSize>>>
+		(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dL, m_dGamma, 0,
+		 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
+		 d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, d_pdTempPhi, d_pdXMoved,
+		 d_pdYMoved, m_dEpsilon, d_bNewNbrs);
+	    }
+
+	  if (bSvStress)
+	    {
+	      m_fP = 0.5 * (*m_pfPxx + *m_pfPyy);
+	      fprintf(m_pOutfSE, "%lu %.7g %.7g %.7g %.7g %.7g %.7g\n",
+		      tTime, *m_pfEnergy, *m_pfPxx, *m_pfPyy, m_fP, *m_pfPxy, *m_pfPyx);
+	      if (bSvPos)
+	    	save_positions(tTime);
+	    }
+
+	cudaThreadSynchronize();
+	checkCudaError("Updating estimates, moving particles");
+
+	cudaMemcpyAsync(h_bNewNbrs, d_bNewNbrs, sizeof(int), cudaMemcpyDeviceToHost);
+	cudaThreadSynchronize();
+	if (*h_bNewNbrs)
+	  find_neighbors();
+
+}
+
+void Spherocyl_Box::resize_box(long unsigned int nStart, double dEpsilon, double dFinalPacking, double dSvStressRate, double dSvPosRate)
+{
+	assert(dEpsilon != 0);
+
+	m_dPacking = calculate_packing();
+	if (dFinalPacking > m_dPacking && dEpsilon < 0)
+		dEpsilon = -dEpsilon;
+	else if (dFinalPacking < m_dPacking && dEpsilon > 0)
+		dEpsilon = -dEpsilon;
+	dSvStressRate = int(dEpsilon/fabs(dEpsilon))*fabs(dSvStressRate);
+	dSvPosRate = int(dEpsilon/fabs(dEpsilon))*fabs(dSvPosRate);
+	printf("Beginning resize with packing fraction: %f\n", m_dPacking);
+
+	unsigned long int nTime = nStart;
+
+	char szBuf[200];
+	sprintf(szBuf, "%s/%s", m_szDataDir, m_szFileSE);
+	const char *szPathSE = szBuf;
+	if (nTime == 0) {
+		m_pOutfSE = fopen(szPathSE, "w");
+		if (m_pOutfSE == NULL) {
+			fprintf(stderr, "Could not open file for writing");
+			exit(1);
+		}
+	}
+	else {
+		m_pOutfSE = fopen(szPathSE, "r+");
+		if (m_pOutfSE == NULL) {
+			fprintf(stderr, "Could not open file for writing");
+			exit(1);
+		}
+
+		int nTpos = 0;
+		while (nTpos != nTime) {
+			if (fgets(szBuf, 200, m_pOutfSE) != NULL) {
+				int nPos = strcspn(szBuf, " ");
+				char szTime[20];
+				strncpy(szTime, szBuf, nPos);
+				szTime[nPos] = '\0';
+				nTpos = atoi(szTime);
+			}
+		  else {
+			  fprintf(stderr, "Reached end of file without finding start position");
+		      exit(1);
+		  }
+		}
+	}
+
+	sprintf(szBuf, "%s/rs_stress_energy.dat", m_szDataDir);
+	const char *szRsSE = szBuf;
+	FILE *pOutfRs;
+	if (nTime == 0) {
+		pOutfRs = fopen(szRsSE, "w");
+		if (pOutfrs == NULL) {
+			fprintf(stderr, "Could not open file for writing");
+			exit(1);
+		}
+	}
+	else {
+		pOutfRs = fopen(szRsSE, "r+");
+		if (pOutfRs == NULL) {
+			fprintf(stderr, "Could not open file for writing");
+			exit(1);
+		}
+		for (unsigned long int t = 0; t < nTime; t++) {
+			fgets(szBuf, 200, pOutfRs);
+		}
+		fgets(szBuf, 200, pOutfRs);
+		int nPos = strcspn(szBuf, " ");
+		char szPack[20];
+		strncpy(szPack, szBuf, nPos);
+		szPack[nPos] = '\0';
+		double dPack = atof(szPack);
+		/*
+	    if (dPack - (1 + dEpsilon) * m_dPacking || dPack < (1 - dShrinkRate) * m_dPacking) {
+	  	  fprintf(stderr, "System packing fraction %g does not match with time %lu", dPack, nTime);
+	   	  exit(1);
+     	}
+		*/
+	}
+
+	int nSaveStressInt = int(log(1+dSvStressRate)/log(1+dEpsilon));
+	int nSavePosInt = int(dSvPosRate/dSvStressRate+0.5)*nSaveStressRate;
+	printf("Starting resize with rate: %g\nStress save rate: %g (%d)\nPosition save rate: %g (%d)\n",
+			dEpsilon, dSvStressRate, nSaveStressInt, dSvPosRate, nSavePosInt);
+	while (dEpsilon*(dFinalPacking - m_dPacking) > dEpsilon*dEpsilon) {
+		bool bSavePos = (nTime % nSavePosInt == 0);
+		bool bSaveStress = (nTime % nSaveStressInt == 0);
+		resize_step(nTime, dEpsilon, pOutfSE, bSaveStress, bSavePos);
+		if (bSaveStress) {
+			fprintf(m_pOutfRs, "%.6g %.7g %.7g %.7g %.7g %.7g %.7g\n",
+					m_dPacking, *m_pfEnergy, *m_pfPxx, *m_pfPyy, m_fP, *m_pfPxy, *m_pfPyx);
+		}
+
+		if (bSavePos) {
+			fflush(stdout);
+			fflush(pOutfRs);
+			fflush(m_pOutfSE);
+		}
+		nTime += 1;
+		//if (nTime % nReorderInterval == 0)
+		//reorder_particles();
+	}
+	resize_step(nTime, dEpsilon, pOutfSE, 1, 1);
+	fprintf(m_pOutfRs, "%.6g %.7g %.7g %.7g %.7g %.7g %.7g\n", m_dPacking, *m_pfEnergy, *m_pfPxx, *m_pfPyy, m_fP, *m_pfPxy, *m_pfPyx);
+	fclose(pOutfSE);
+	fclose(pOutfRs);
+
+}
+
+
+

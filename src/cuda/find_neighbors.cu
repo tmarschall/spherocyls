@@ -537,3 +537,33 @@ void Spherocyl_Box::reset_IDs()
   cudaMemcpy(d_pnMemID, d_pnInitID, sizeof(int)*m_nSpherocyls, cudaMemcpyDeviceToDevice);
   
 }
+
+__global__ void reflect_yaxis(int nParticles, double *pdX, double *pdPhi, double dLx)
+{
+	int nPID = threadIdx.x + blockDim.x*blockIdx.x;
+	int nThreads = blockDim.x * gridDim.x;
+
+	while (thid < nParticles) {
+		pdX[nPID] = dLx - pdX[nPID];
+		pdPhi[nPID] = -pdPhi[nPID];
+		nPID += nThreads;
+	}
+
+}
+
+void Spherocyl_Box::flip_shear_direction()
+{
+	cudaMemset((void *) d_pnPPC, 0, sizeof(int)*m_nCells);
+	cudaMemset((void *) d_pdXMoved, 0, sizeof(double)*m_nSpherocyls);
+	cudaMemset((void *) d_pdYMoved, 0, sizeof(double)*m_nSpherocyls);
+	cudaMemset((void *) d_bNewNbrs, 0, sizeof(int));
+
+	reflect_yaxis <<<m_nGridSize, m_nBlockSize>>>
+	    (m_nSpherocyls, d_pdX, d_pdPhi, m_dL);
+	cudaThreadSynchronize();
+	checkCudaError("Finding new coordinates, cells");
+	m_dGamma = -m_dGamma;
+
+	find_neighbors();
+}
+

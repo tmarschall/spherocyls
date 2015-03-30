@@ -161,6 +161,7 @@ class Spherocyl_Box
   
   void save_positions(long unsigned int nTime);
   void strain_step(long unsigned int nTime, bool bSvStress = 0, bool bSvPos = 0);
+  void resize_step(long unsigned int tTime, double dEpsilon, bool bSvStress, bool bSvPos);
 
  public:
   Spherocyl_Box(int nSpherocyls, double dL, double dAspect, double dBidispersity, 
@@ -177,6 +178,7 @@ class Spherocyl_Box
   void place_spherocyls(Config config, int seed = 0, double dBidispersity = 1);
   void find_neighbors();
   void set_back_gamma();
+  void flip_shear_direction();
   void reorder_particles();
   void reset_IDs();
   void calculate_stress_energy();
@@ -185,6 +187,7 @@ class Spherocyl_Box
   bool check_for_crosses(int nIndex, double dEpsilon = 1e-5);
   void run_strain(double dStartGam, double dStopGam, double dSvStressGam, double dSvPosGam);
   void run_strain(long unsigned int nSteps);
+  void resize_box(long unsigned int nStart, double dEpsilon, double dFinalPacking, unsigned int nSvStressInt, unsigned int nSvPosInt);
   
 #if GOLD_FUNCS == 1
   void calculate_stress_energy_gold();

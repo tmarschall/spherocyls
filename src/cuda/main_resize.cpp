@@ -69,25 +69,25 @@ int main(int argc, char* argv[])
   cout << strDir << endl;
   int nSpherocyls = int_input(argc, argv, ++argn, "Number of particles");
   cout << nSpherocyls << endl;
-  double dStrainRate = float_input(argc, argv, ++argn, "Strain rate");
-  cout << dStrainRate << endl;
+  double dResizeRate = float_input(argc, argv, ++argn, "Resize rate (epsilon)");
+  cout << dResizeRate << endl;
   double dStep = float_input(argc, argv, ++argn, "Integration step size");
   cout << dStep << endl;
-  double dRunLength = float_input(argc, argv, ++argn, "Strain run length (gamma)");
-  cout << dRunLength << endl;
+  double dFinalPacking = float_input(argc, argv, ++argn, "Final packing fraction");
+  cout << dFinalPacking << endl;
   double dPosSaveRate = float_input(argc, argv, ++argn, "Position data save rate");
   cout << dPosSaveRate << endl;
   double dStressSaveRate = float_input(argc, argv, ++argn, "Stress data save rate");
   cout << dStressSaveRate << endl;
   double dDR = float_input(argc, argv, ++argn, "Cell padding");
   cout << dDR << endl;
-  bool bFlipShear = (bool)int_input(argc, argv, ++argn, "Reverse shear direction (1 to reverse):");
-  cout << bFlipShear << endl;
 
-  if (dStressSaveRate < dStrainRate * dStep)
-    dStressSaveRate = dStrainRate * dStep;
-  if (dPosSaveRate < dStrainRate)
-    dPosSaveRate = dStrainRate;
+  if (fabs(dStressSaveRate) < fabs(dEpsilon)) {
+	  dStressSaveRate = dEpsilon;
+  }
+  if (fabs(dPosSaveRate) < fabs(dStressSaveRate)) {
+	  dPosSaveRate = dStressSaveRate;
+  }
 
   double dL;
   double *dX = new double[nSpherocyls];
@@ -182,12 +182,6 @@ int main(int argc, char* argv[])
     dPacking = cData.getHeadFloat(2);
     dGamma = cData.getHeadFloat(3);
     dTotalGamma = cData.getHeadFloat(4);
-    if (cData.getHeadFloat(5) != dStrainRate) {
-      cerr << "Warning: Strain rate in data file does not match the requested rate" << endl;
-    }
-    if (cData.getHeadFloat(6) != dStep) {
-      cerr << "Warning: Integration step size in data file does not match requested step" << endl;
-    }
     
     int nFileLen = strFile.length();
     string strNum = strFile.substr(nFileLen-14, 10);
@@ -214,14 +208,10 @@ int main(int argc, char* argv[])
 
   cSpherocyls->set_gamma(dGamma);
   cSpherocyls->set_total_gamma(dTotalGamma);
-  cSpherocyls->set_strain(dStrainRate);
+  cSpherocyls->set_strain(0);
   cSpherocyls->set_step(dStep);
   cSpherocyls->set_data_dir(szDir);
   cout << "Configuration set" << endl;
-  if (bFlipShear) {
-	  cSpherocyls->flip_shear_direction();
-	  cout << "Shear direction reversed" <<  endl;
-  }
   
   //cSpherocyls.place_random_spherocyls();
   //cout << "Random spherocyls placed" << endl;
@@ -234,24 +224,8 @@ int main(int argc, char* argv[])
   cout << "Stresses calculated" << endl;
   cSpherocyls->display(1,1,1,1);
 
-  /*
-  cSpherocyls.find_neighbors();
-  cout << "Neighbor lists created" << endl;
-  cSpherocyls.display(1,0,1,0);
-  cSpherocyls.reorder_particles();
-  cSpherocyls.reset_IDs();
-  cout << "Spherocyls spatially reordered" << endl;
-  cSpherocyls.display(1,0,1,0);
-  cSpherocyls.set_gamma(0.5);
-  cSpherocyls.set_back_gamma();
-  cout << "Gamma reset" << endl;
-  cSpherocyls.display(1,0,1,0);
-  cSpherocyls.calculate_stress_energy();
-  cout << "Energy and stress tensor calculated" << endl;
-  cSpherocyls.display(0,0,0,1);
-  */
 
-  cSpherocyls->run_strain(dTotalGamma, dTotalGamma+dRunLength, dStressSaveRate, dPosSaveRate);
+  cSpherocyls->resize_box(nTime, dResizeRate, dFinalPacking, dStressSaveRate, dPosSaveRate);
   cSpherocyls->display(1,0,0,1);
 
   int tStop = time(0);

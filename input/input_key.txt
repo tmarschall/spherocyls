@@ -15,6 +15,7 @@ The order of the arguments for spherocyl_strain are:
 7) How often to save position data files (in terms of gamma) (float)
 8) How often to save the stress tensor components and energy (float)
 9) A padding number which determines how often new neighbor lists need to be generated (too small or too big and the program may run slow, I usually use around 0.1)
+10) Whether to flip the shear direction (boolean)
 10) The packing fraction (only necessary when using a random configuration)
 11) The spherocylinder aspect ratio (A/R, where the base for R is 0.5)
 12) The bidispersity (R2/R1, where the base for R1 is 0.5)
