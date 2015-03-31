@@ -325,8 +325,10 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double *pdX,
   cudaHostAlloc((void**)&h_pnMemID, nSpherocyls*sizeof(int), 0);
   m_dRMax = 0.0;
   m_dAMax = 0.0;
+  cout << "Loading positions" << endl;
   for (int p = 0; p < nSpherocyls; p++)
     {
+	  cout << "loading p=" << p << endl;
       h_pdX[p] = pdX[p];
       h_pdY[p] = pdY[p];
       h_pdPhi[p] = pdPhi[p];
@@ -347,6 +349,7 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double *pdX,
 	h_pdY[p] += dL;
     }
   m_dPacking = calculate_packing();
+  cout << "Positions loaded" << endl;
 
   // This initializes the arrays on the GPU
   cudaMalloc((void**) &d_pdX, sizeof(double)*nSpherocyls);
@@ -389,6 +392,7 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double *pdX,
     }
 #endif
 
+  cout << "Positions transfered to device" << endl;
   construct_defaults();
   cout << "Memory allocated on device (MB): " << (double)m_nDeviceMem / (1024.*1024.) << endl;
   // Get spheocyl coordinates from spherocyls
