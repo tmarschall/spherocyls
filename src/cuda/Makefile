@@ -3,7 +3,7 @@ CXX=g++
 NVCC=nvcc
 
 # paths of cuda libraries
-CUDAPATH=/software/cuda/6.5
+CUDAPATH=/software/cuda/5.5/b1
 # for cudpp:
 #CUDASDKPATH=/usr/local/cuda/SDK/NVIDIA_GPU_Computing_SDK/C
 
@@ -15,7 +15,7 @@ CUDAINCLUDE=-I$(CUDAPATH)/include
 CXXFLAGS=-O3 -DGOLD_FUNCS=0
 NVCCFLAGS=--ptxas-options=-v -O3 -arch=sm_35 -DGOLD_FUNCS=0
 # linker flags: include all warnings, include library files
-LDFLAGS=-Wall -L$(CUDAPATH)/lib64 -lcudart
+LDFLAGS=-Wall -lcudart
 
 # object files
 CXXOBJECTS=spherocyl_box.o cudaErr.o dat_file_input.o
@@ -39,7 +39,7 @@ resize: $(RESZ)
 
 $(EXE): $(CXXOBJECTS) $(NVCCOBJECTS) main.o
 	$(CXX) -o $(EXE) main.o $(CXXOBJECTS) $(NVCCOBJECTS) $(LDFLAGS)
-	
+
 $(RESZ): $(CXXOBJECTS) $(NVCCOBJECTS) main_resize.o
 	$(CXX) -o $(RESZ) main_resize.o $(CXXOBJECTS) $(NVCCOBJECTS) $(LDFLAGS)
 
@@ -52,35 +52,35 @@ $(RESZ): $(CXXOBJECTS) $(NVCCOBJECTS) main_resize.o
 
 #c++ files
 main.o: main.cpp spherocyl_box.h
-	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -c main.cpp
-	
+	$(CXX) $(CXXFLAGS) -c main.cpp
+
 main_resize.o: main_resize.cpp spherocyl_box.h
-	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -c main_resize.cpp
+	$(CXX) $(CXXFLAGS) -c main_resize.cpp
 
 #main_profile.o: main_profile.cpp spherocyl_box.h
 #	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -c main_profile.cpp
 
 spherocyl_box.o: spherocyl_box.cpp spherocyl_box.h
-	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -c spherocyl_box.cpp
+	$(CXX) $(CXXFLAGS) -c spherocyl_box.cpp
 
 cudaErr.o: cudaErr.h cudaErr.cpp
-	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -c cudaErr.cpp
+	$(CXX) $(CXXFLAGS) -c cudaErr.cpp
 
 dat_file_input.o: file_input.h dat_file_input.cpp
-	$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -c dat_file_input.cpp
+	$(CXX) $(CXXFLAGS) -c dat_file_input.cpp
 
 #cuda files
 find_neighbors.o: spherocyl_box.h data_primitives.h cudaErr.h find_neighbors.cu
-	$(NVCC) $(NVCCFLAGS) $(CUDAINCLUDE) -c find_neighbors.cu
+	$(NVCC) $(NVCCFLAGS) -c find_neighbors.cu
 
 calculate_stress_energy.o: spherocyl_box.h cudaErr.h calculate_stress_energy.cu
-	$(NVCC) $(NVCCFLAGS) $(CUDAINCLUDE) -c calculate_stress_energy.cu
+	$(NVCC) $(NVCCFLAGS) -c calculate_stress_energy.cu
 
 strain_dynamics.o: spherocyl_box.h cudaErr.h strain_dynamics.cu
-	$(NVCC) $(NVCCFLAGS) $(CUDAINCLUDE) -c strain_dynamics.cu
+	$(NVCC) $(NVCCFLAGS) -c strain_dynamics.cu
 
 data_primitives_2.o: data_primitives.h
-	$(NVCC) $(NVCCFLAGS) $(CUDAINCLUDE) -c data_primitives_2.cu
+	$(NVCC) $(NVCCFLAGS) -c data_primitives_2.cu
 
 #clean up object files or other assembly files
 clean:
