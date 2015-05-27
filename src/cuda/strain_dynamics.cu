@@ -752,6 +752,108 @@ void Spherocyl_Box::run_strain(double dStartGamma, double dStopGamma, double dSv
   fclose(m_pOutfSE);
 }
 
+
+void Spherocyl_Box::run_strain(unsigned long int nStart, double dRunGamma, double dSvStressGamma, double dSvPosGamma)
+{
+  if (m_dStrainRate == 0.0)
+    {
+      fprintf(stderr, "Cannot strain with zero strain rate\n");
+      exit(1);
+    }
+
+  printf("Beginnig strain run with strain rate: %g and step %g\n", m_dStrainRate, m_dStep);
+  fflush(stdout);
+
+  if (dSvStressGamma < m_dStrainRate * m_dStep)
+    dSvStressGamma = m_dStrainRate * m_dStep;
+  if (dSvPosGamma < m_dStrainRate)
+    dSvPosGamma = m_dStrainRate;
+
+  // +0.5 to cast to nearest integer rather than rounding down
+  unsigned long int nTime = nStart;
+  unsigned long int nStop = nStart + (unsigned long)(dRunGamma / m_dStrainRate + 0.5);
+  unsigned int nIntStep = (unsigned int)(1.0 / m_dStep + 0.5);
+  unsigned int nSvStressInterval = (unsigned int)(dSvStressGamma / (m_dStrainRate * m_dStep) + 0.5);
+  unsigned int nSvPosInterval = (unsigned int)(dSvPosGamma / m_dStrainRate + 0.5);
+  unsigned long int nTotalStep = nTime * nIntStep;
+  //unsigned int nReorderInterval = (unsigned int)(1.0 / m_dStrainRate + 0.5);
+  
+  printf("Strain run configured\n");
+  printf("Start: %lu, Stop: %lu, Int step: %lu\n", nTime, nStop, nIntStep);
+  printf("Stress save int: %lu, Pos save int: %lu\n", nSvStressInterval, nSvPosInterval);
+  fflush(stdout);
+
+  char szBuf[200];
+  sprintf(szBuf, "%s/%s", m_szDataDir, m_szFileSE);
+  const char *szPathSE = szBuf;
+  if (nTime == 0)
+    {
+      m_pOutfSE = fopen(szPathSE, "w");
+      if (m_pOutfSE == NULL)
+	{
+	  fprintf(stderr, "Could not open file for writing");
+	  exit(1);
+	}
+    }
+  else
+    {  
+      m_pOutfSE = fopen(szPathSE, "r+");
+      if (m_pOutfSE == NULL)
+	{
+	  fprintf(stderr, "Could not open file for writing");
+	  exit(1);
+	}
+      
+      int nTpos = 0;
+      while (nTpos != nTime)
+	{
+	  if (fgets(szBuf, 200, m_pOutfSE) != NULL)
+	    {
+	      int nPos = strcspn(szBuf, " ");
+	      char szTime[20];
+	      strncpy(szTime, szBuf, nPos);
+	      szTime[nPos] = '\0';
+	      nTpos = atoi(szTime);
+	    }
+	  else
+	    {
+	      fprintf(stderr, "Reached end of file without finding start position");
+	      exit(1);
+	    }
+	}
+    }
+
+  // Run strain for specified number of steps
+  while (nTime < nStop)
+    {
+      bool bSvPos = (nTime % nSvPosInterval == 0);
+      if (bSvPos) {
+	strain_step(nTime, 1, 1);
+	fflush(m_pOutfSE);
+      }
+      else
+	{
+	  bool bSvStress = (nTotalStep % nSvStressInterval == 0);
+	  strain_step(nTime, bSvStress, 0);
+	}
+      nTotalStep += 1;
+      for (unsigned int nI = 1; nI < nIntStep; nI++)
+	{
+	  bool bSvStress = (nTotalStep % nSvStressInterval == 0); 
+	  strain_step(nTime, bSvStress, 0);
+	  nTotalStep += 1;
+	}
+      nTime += 1;
+      //if (nTime % nReorderInterval == 0)
+      //reorder_particles();
+    }
+  
+  // Save final configuration
+  strain_step(nTime, 1, 1);
+  fflush(m_pOutfSE);
+  fclose(m_pOutfSE);
+}
+
 void Spherocyl_Box::run_strain(long unsigned int nSteps)
 {
   // Run strain for specified number of steps
@@ -877,9 +979,9 @@ void Spherocyl_Box::resize_box(long unsigned int nStart, double dEpsilon, double
 	assert(dEpsilon != 0);
 
 	m_dPacking = calculate_packing();
-	if (dFinalPacking > m_dPacking && dEpsilon < 0)
+	if (dFinalPacking > m_dPacking && dEpsilon > 0)
 		dEpsilon = -dEpsilon;
-	else if (dFinalPacking < m_dPacking && dEpsilon > 0)
+	else if (dFinalPacking < m_dPacking && dEpsilon < 0)
 		dEpsilon = -dEpsilon;
 	dSvStressRate = int(dEpsilon/fabs(dEpsilon))*fabs(dSvStressRate);
 	dSvPosRate = int(dEpsilon/fabs(dEpsilon))*fabs(dSvPosRate);
@@ -957,9 +1059,11 @@ void Spherocyl_Box::resize_box(long unsigned int nStart, double dEpsilon, double
 	int nSavePosInt = int(dSvPosRate/dSvStressRate+0.5)*nSaveStressInt;
 	printf("Starting resize with rate: %g\nStress save rate: %g (%d)\nPosition save rate: %g (%d)\n",
 			dEpsilon, dSvStressRate, nSaveStressInt, dSvPosRate, nSavePosInt);
-	while (dEpsilon*(dFinalPacking - m_dPacking) > dEpsilon*dEpsilon) {
+	while (dEpsilon*(m_dPacking - dFinalPacking) > dEpsilon*dEpsilon) {
 		bool bSavePos = (nTime % nSavePosInt == 0);
 		bool bSaveStress = (nTime % nSaveStressInt == 0);
+		//printf("Step %l\n", nTime);
+		//fflush(stdout);
 		resize_step(nTime, dEpsilon, bSaveStress, bSavePos);
 		if (bSaveStress) {
 			fprintf(pOutfRs, "%.6g %.7g %.7g %.7g %.7g %.7g %.7g\n",

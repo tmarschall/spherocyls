@@ -251,7 +251,7 @@ int main(int argc, char* argv[])
   cSpherocyls.display(0,0,0,1);
   */
 
-  cSpherocyls->run_strain(dTotalGamma, dTotalGamma+dRunLength, dStressSaveRate, dPosSaveRate);
+  cSpherocyls->run_strain(nTime, dRunLength, dStressSaveRate, dPosSaveRate);
   cSpherocyls->display(1,0,0,1);
 
   int tStop = time(0);

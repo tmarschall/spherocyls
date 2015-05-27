@@ -165,11 +165,11 @@ class Spherocyl_Box
 
  public:
   Spherocyl_Box(int nSpherocyls, double dL, double dAspect, double dBidispersity, 
-		Config config, double dEpsilon = 0.1,  int nMaxPPC = 15, 
-		int nMaxNbrs = 35, Potential ePotential = HARMONIC);
+		Config config, double dEpsilon = 0.1,  int nMaxPPC = 18, 
+		int nMaxNbrs = 40, Potential ePotential = HARMONIC);
   Spherocyl_Box(int nSpherocyls, double dL, double *pdX, double *pdY, 
 		double *pdPhi, double *pdR, double *pdA, double dEpsilon = 0.1,
-		int nMaxPPC = 15, int nMaxNbrs = 35, Potential ePotential = HARMONIC);
+		int nMaxPPC = 18, int nMaxNbrs = 40, Potential ePotential = HARMONIC);
   ~Spherocyl_Box();
 
   void place_random_spherocyls(int seed = 0, bool bRandAngle = 1, double dBidispersity = 1);
@@ -186,6 +186,7 @@ class Spherocyl_Box
   bool check_for_contacts(int nIndex, double dTol = 0);
   bool check_for_crosses(int nIndex, double dEpsilon = 1e-5);
   void run_strain(double dStartGam, double dStopGam, double dSvStressGam, double dSvPosGam);
+  void run_strain(long unsigned int nStart, double dRunGamma, double dSvStressGam, double dSvPosGam);
   void run_strain(long unsigned int nSteps);
   void resize_box(long unsigned int nStart, double dEpsilon, double dFinalPacking, double SvStressRate, double dSvPosRate);
   

@@ -567,3 +567,26 @@ void Spherocyl_Box::flip_shear_direction()
 	find_neighbors();
 }
 
+/*
+__global__ void rotate(int nParticles, double *pdX, double *pdY, double *pdPhi, double dL, double dGamma, double dTheta)
+{
+  int nPID = threadIdx.x + blockDim.x*blockIdx.x;
+  int nThreads = blockDim.x * gridDim.x;
+
+  while (nPID < nParticles) {
+    double dY = pdY[nPID];
+    double dX = pdX[nPID] + dGamma*dY;
+    double dCosQ = cos(dTheta);
+    double dSinQ = sin(dTheta);
+    double dRotX = dX*dCosQ - dY*dSinQ;
+    double dRotY = dX*dSinQ + dY*dCosQ;
+    dRotX += dL*((dRotX < 0) - (dRotX > dL));
+    dRotY += dL*((dRotY < 0) - (dRotY > dL));
+
+    pdX[nPID] = dRotX;
+    pdY[nPID] = dRotY;
+    pdPhi[nPID] += dTheta;
+    nPID += nThreads;
+  }
+}
+*/
