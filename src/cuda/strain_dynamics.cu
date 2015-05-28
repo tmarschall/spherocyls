@@ -53,9 +53,9 @@ __global__ void calc_rot_consts(int nSpherocyls, double *pdR, double *pdAs,
 //
 ///////////////////////////////////////////////////////////
 template<Potential ePot, int bCalcStress>
-__global__ void euler_est_sc(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL, double dGamma, 
-			     double dStrain, double dStep, double *pdX, double *pdY, double *pdPhi, 
-			     double *pdR, double *pdA, double *pdMOI, double *pdFx, double *pdFy, 
+__global__ void euler_est_sc(int nSpherocyls, int *pnNPP, int *pnNbrList, double dLx, double dLy,
+				 double dGamma, double dStrain, double dStep, double *pdX, double *pdY,
+				 double *pdPhi, double *pdR, double *pdA, double *pdMOI, double *pdFx, double *pdFy,
 			     double *pdFt, float *pfSE, double *pdTempX, double *pdTempY, double *pdTempPhi)
 { 
   int thid = threadIdx.x;
@@ -93,8 +93,8 @@ __global__ void euler_est_sc(int nSpherocyls, int *pnNPP, int *pnNbrList, double
 	  double dSigma = dR + pdR[nAdjPID];
 	  double dB = pdA[nAdjPID];
 	  // Make sure we take the closest distance considering boundary conditions
-	  dDeltaX += dL * ((dDeltaX < -0.5*dL) - (dDeltaX > 0.5*dL));
-	  dDeltaY += dL * ((dDeltaY < -0.5*dL) - (dDeltaY > 0.5*dL));
+	  dDeltaX += dLx * ((dDeltaX < -0.5*dLx) - (dDeltaX > 0.5*dLx));
+	  dDeltaY += dLy * ((dDeltaY < -0.5*dLy) - (dDeltaY > 0.5*dLy));
 	  // Transform from shear coordinates to lab coordinates
 	  dDeltaX += dGamma * dDeltaY;
 	  
@@ -145,13 +145,13 @@ __global__ void euler_est_sc(int nSpherocyls, int *pnNPP, int *pnNbrList, double
 		{
 		  double dCx = 0.5*dDx - s*nxA;
 		  double dCy = 0.5*dDy - s*nyA;
-		  sData[thid] += dCx * dPfx / (dL * dL);
-		  sData[thid + offset] += dCy * dPfy / (dL * dL);
-		  sData[thid + 2*offset] += dCx * dPfy / (dL * dL);
-		  sData[thid + 3*offset] += dCy * dPfx / (dL * dL); 
+		  sData[thid] += dCx * dPfx / (dLx * dLy);
+		  sData[thid + offset] += dCy * dPfy / (dLx * dLy);
+		  sData[thid + 2*offset] += dCx * dPfy / (dLx * dLy);
+		  sData[thid + 3*offset] += dCy * dPfx / (dLx * dLy);
 		  if (nAdjPID > nPID)
 		    {
-		      sData[thid + 4*offset] += dDVij * dSigma * (1.0 - dDij / dSigma) / (dAlpha * dL * dL);
+		      sData[thid + 4*offset] += dDVij * dSigma * (1.0 - dDij / dSigma) / (dAlpha * dLx * dLy);
 		    }
 		}
 	    }
@@ -221,9 +221,9 @@ __global__ void euler_est_sc(int nSpherocyls, int *pnNPP, int *pnNbrList, double
 
 
 template<Potential ePot, int bCalcStress>
-__global__ void euler_est(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL, double dGamma, 
-			  double dStrain, double dStep, double *pdX, double *pdY, double *pdPhi, double *pdR, 
-			  double *pdA, double *pdMOI, double *pdIsoC, double *pdFx, double *pdFy, 
+__global__ void euler_est(int nSpherocyls, int *pnNPP, int *pnNbrList, double dLx, double dLy,
+			  double dGamma, double dStrain, double dStep, double *pdX, double *pdY, double *pdPhi,
+			  double *pdR, double *pdA, double *pdMOI, double *pdIsoC, double *pdFx, double *pdFy,
 			  double *pdFt, float *pfSE, double *pdTempX, double *pdTempY, double *pdTempPhi)
 { 
   int thid = threadIdx.x;
@@ -263,8 +263,8 @@ __global__ void euler_est(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL
 	  double dSigma = dR + pdR[nAdjPID];
 	  double dB = pdA[nAdjPID];
 	  // Make sure we take the closest distance considering boundary conditions
-	  dDeltaX += dL * ((dDeltaX < -0.5*dL) - (dDeltaX > 0.5*dL));
-	  dDeltaY += dL * ((dDeltaY < -0.5*dL) - (dDeltaY > 0.5*dL));
+	  dDeltaX += dLx * ((dDeltaX < -0.5*dLx) - (dDeltaX > 0.5*dLx));
+	  dDeltaY += dLy * ((dDeltaY < -0.5*dLy) - (dDeltaY > 0.5*dLy));
 	  // Transform from shear coordinates to lab coordinates
 	  dDeltaX += dGamma * dDeltaY;
 	  
@@ -320,13 +320,13 @@ __global__ void euler_est(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL
 		{
 		  double dCx = 0.5*dDx - s*nxA;
 		  double dCy = 0.5*dDy - s*nyA;
-		  sData[thid] += dCx * dPfx / (dL * dL);
-		  sData[thid + offset] += dCy * dPfy / (dL * dL);
-		  sData[thid + 2*offset] += dCx * dPfy / (dL * dL);
-		  sData[thid + 3*offset] += dCy * dPfx / (dL * dL); 
+		  sData[thid] += dCx * dPfx / (dLx * dLy);
+		  sData[thid + offset] += dCy * dPfy / (dLx * dLy);
+		  sData[thid + 2*offset] += dCx * dPfy / (dLx * dLy);
+		  sData[thid + 3*offset] += dCy * dPfx / (dLx * dLy);
 		  if (nAdjPID > nPID)
 		    {
-		      sData[thid + 4*offset] += dDVij * dSigma * (1.0 - dDij / dSigma) / (dAlpha * dL * dL);
+		      sData[thid + 4*offset] += dDVij * dSigma * (1.0 - dDij / dSigma) / (dAlpha * dLx * dLy);
 		    }
 		}
 	    }
@@ -399,11 +399,11 @@ __global__ void euler_est(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL
 //
 /////////////////////////////////////////////////////////////////
 template<Potential ePot>
-__global__ void heun_corr(int nSpherocyls, int *pnNPP,int *pnNbrList,double dL, double dGamma, 
-			  double dStrain, double dStep, double *pdX, double *pdY, double *pdPhi, 
-			  double *pdR, double *pdA, double *pdMOI, double *pdIsoC, double *pdFx, 
-			  double *pdFy, double *pdFt, double *pdTempX, double *pdTempY, double *pdTempPhi, 
-			  double *pdXMoved, double *pdYMoved, double dEpsilon, int *bNewNbrs)
+__global__ void heun_corr(int nSpherocyls, int *pnNPP,int *pnNbrList,double dLx, double dLy,
+			  double dGamma, double dStrain, double dStep, double *pdX, double *pdY,
+			  double *pdPhi, double *pdR, double *pdA, double *pdMOI, double *pdIsoC,
+			  double *pdFx, double *pdFy, double *pdFt, double *pdTempX, double *pdTempY,
+			  double *pdTempPhi, double *pdXMoved, double *pdYMoved, double dEpsilon, int *bNewNbrs)
 { 
   int thid = threadIdx.x;
   int nPID = thid + blockIdx.x * blockDim.x;
@@ -436,8 +436,8 @@ __global__ void heun_corr(int nSpherocyls, int *pnNPP,int *pnNbrList,double dL, 
 	  double dSigma = dR + pdR[nAdjPID];
 	  double dB = pdA[nAdjPID];
 	  // Make sure we take the closest distance considering boundary conditions
-	  dDeltaX += dL * ((dDeltaX < -0.5*dL) - (dDeltaX > 0.5*dL));
-	  dDeltaY += dL * ((dDeltaY < -0.5*dL) - (dDeltaY > 0.5*dL));
+	  dDeltaX += dLx * ((dDeltaX < -0.5*dLx) - (dDeltaX > 0.5*dLx));
+	  dDeltaY += dLy * ((dDeltaY < -0.5*dLy) - (dDeltaY > 0.5*dLy));
 	  // Transform from shear coordinates to lab coordinates
 	  dDeltaX += dNewGamma * dDeltaY;
 	  
@@ -532,13 +532,13 @@ void Spherocyl_Box::strain_step(long unsigned int tTime, bool bSvStress, bool bS
 	{
 	case HARMONIC:
 	  euler_est <HARMONIC, 1> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
-	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dL, m_dGamma,m_dStrainRate,
+	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma,m_dStrainRate,
 	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, d_pdFx, 
 	     d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 	  break;
 	case HERTZIAN:
 	  euler_est <HERTZIAN, 1> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
-	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dL, m_dGamma,m_dStrainRate,
+	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma,m_dStrainRate,
 	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, d_pdFx, 
 	     d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 	}
@@ -560,13 +560,13 @@ void Spherocyl_Box::strain_step(long unsigned int tTime, bool bSvStress, bool bS
 	{
 	case HARMONIC:
 	  euler_est <HARMONIC, 0> <<<m_nGridSize, m_nBlockSize>>>
-	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dL, m_dGamma,m_dStrainRate,
+	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma,m_dStrainRate,
 	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, 
 	     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 	  break;
 	case HERTZIAN:
 	  euler_est <HERTZIAN, 0> <<<m_nGridSize, m_nBlockSize>>>
-	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dL, m_dGamma,m_dStrainRate,
+	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma,m_dStrainRate,
 	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, 
 	     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 	}
@@ -578,14 +578,14 @@ void Spherocyl_Box::strain_step(long unsigned int tTime, bool bSvStress, bool bS
     {
     case HARMONIC:
       heun_corr <HARMONIC> <<<m_nGridSize, m_nBlockSize>>>
-	(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dL, m_dGamma, m_dStrainRate, 
+	(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, m_dStrainRate,
 	 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, 
 	 d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, d_pdTempPhi, d_pdXMoved, 
 	 d_pdYMoved, m_dEpsilon, d_bNewNbrs);
       break;
     case HERTZIAN:
       heun_corr <HERTZIAN> <<<m_nGridSize, m_nBlockSize>>>
-	(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dL, m_dGamma, m_dStrainRate, 
+	(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, m_dStrainRate,
 	 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, 
 	 d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, d_pdTempPhi, d_pdXMoved, 
 	 d_pdYMoved, m_dEpsilon, d_bNewNbrs);
@@ -634,8 +634,8 @@ void Spherocyl_Box::save_positions(long unsigned int nTime)
     }
 
   int i = h_pnMemID[0];
-  fprintf(pOutfPos, "%d %.13g %.13g %.13g %.13g %g %g\n", 
-	  m_nSpherocyls, m_dL, m_dPacking, m_dGamma, m_dTotalGamma, m_dStrainRate, m_dStep);
+  fprintf(pOutfPos, "%d %.13g %.13g %.13g %.13g %.13g %g %g\n",
+	  m_nSpherocyls, m_dLx, m_dLy, m_dPacking, m_dGamma, m_dTotalGamma, m_dStrainRate, m_dStep);
   for (int p = 0; p < m_nSpherocyls; p++)
     {
       i = h_pnMemID[p];
@@ -883,7 +883,8 @@ __global__ void resize_coords(int nParticles, double dEpsilon, double *pdX, doub
 void Spherocyl_Box::resize_step(long unsigned int tTime, double dEpsilon, bool bSvStress, bool bSvPos)
 {
 	resize_coords <<<m_nGridSize, m_nBlockSize>>> (m_nSpherocyls, dEpsilon, d_pdX, d_pdY);
-	m_dL += dEpsilon*m_dL;
+	m_dLx += dEpsilon*m_dLx;
+	m_dLy += dEpsilon*m_dLy;
 	m_dPacking = calculate_packing();
 	cudaThreadSynchronize();
 	checkCudaError("Resizing box");
@@ -896,13 +897,13 @@ void Spherocyl_Box::resize_step(long unsigned int tTime, double dEpsilon, bool b
 		{
 		case HARMONIC:
 		  euler_est <HARMONIC, 1> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
-		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dL, m_dGamma, 0,
+		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
 		     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, d_pdFx,
 		     d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 		  break;
 		case HERTZIAN:
 		  euler_est <HERTZIAN, 1> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
-		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dL, m_dGamma, 0,
+		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
 		     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, d_pdFx,
 		     d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 		}
@@ -924,13 +925,13 @@ void Spherocyl_Box::resize_step(long unsigned int tTime, double dEpsilon, bool b
 		{
 		case HARMONIC:
 		  euler_est <HARMONIC, 0> <<<m_nGridSize, m_nBlockSize>>>
-		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dL, m_dGamma, 0,
+		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
 		     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
 		     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 		  break;
 		case HERTZIAN:
 		  euler_est <HERTZIAN, 0> <<<m_nGridSize, m_nBlockSize>>>
-		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dL, m_dGamma, 0,
+		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
 		     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
 		     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 		}
@@ -942,14 +943,14 @@ void Spherocyl_Box::resize_step(long unsigned int tTime, double dEpsilon, bool b
 	    {
 	    case HARMONIC:
 	      heun_corr <HARMONIC> <<<m_nGridSize, m_nBlockSize>>>
-		(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dL, m_dGamma, 0,
+		(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
 		 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
 		 d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, d_pdTempPhi, d_pdXMoved,
 		 d_pdYMoved, m_dEpsilon, d_bNewNbrs);
 	      break;
 	    case HERTZIAN:
 	      heun_corr <HERTZIAN> <<<m_nGridSize, m_nBlockSize>>>
-		(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dL, m_dGamma, 0,
+		(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
 		 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
 		 d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, d_pdTempPhi, d_pdXMoved,
 		 d_pdYMoved, m_dEpsilon, d_bNewNbrs);

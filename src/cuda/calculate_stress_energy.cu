@@ -26,10 +26,10 @@ using namespace std;
 //
 /////////////////////////////////////////////////////////
 template<Potential ePot>
-__global__ void calc_se(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL,
-			double dGamma, double *pdX, double *pdY, double *pdPhi,
-			double *pdR, double *pdA, double *pdFx, double *pdFy, 
-			double *pdFt, float *pfSE)
+__global__ void calc_se(int nSpherocyls, int *pnNPP, int *pnNbrList,
+			double dLx, double dLy, double dGamma, double *pdX,
+			double *pdY, double *pdPhi, double *pdR, double *pdA,
+			double *pdFx, double *pdFy, double *pdFt, float *pfSE)
 {
   // Declare shared memory pointer, the size is determined at the kernel launch
   extern __shared__ double sData[];
@@ -64,8 +64,8 @@ __global__ void calc_se(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL,
 	  double dSigma = dR + pdR[nAdjPID];
 	  double dB = pdA[nAdjPID];
 	  // Make sure we take the closest distance considering boundary conditions
-	  dDeltaX += dL * ((dDeltaX < -0.5*dL) - (dDeltaX > 0.5*dL));
-	  dDeltaY += dL * ((dDeltaY < -0.5*dL) - (dDeltaY > 0.5*dL));
+	  dDeltaX += dLx * ((dDeltaX < -0.5*dLx) - (dDeltaX > 0.5*dLx));
+	  dDeltaY += dLy * ((dDeltaY < -0.5*dLy) - (dDeltaY > 0.5*dLy));
 	  // Transform from shear coordinates to lab coordinates
 	  dDeltaX += dGamma * dDeltaY;
 
@@ -115,13 +115,13 @@ __global__ void calc_se(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL,
 	      dFy += dPfy;
 	      dFt += s*nxA * dPfy - s*nyA * dPfx;
 
-	      sData[thid] += dCx * dPfx / (dL * dL);
-	      sData[thid + offset] += dCy * dPfy / (dL * dL);
-	      sData[thid + 2*offset] += dCx * dPfy / (dL * dL);
-	      sData[thid + 3*offset] += dCy * dPfx / (dL * dL); 
+	      sData[thid] += dCx * dPfx / (dLx * dLy);
+	      sData[thid + offset] += dCy * dPfy / (dLx * dLy);
+	      sData[thid + 2*offset] += dCx * dPfy / (dLx * dLy);
+	      sData[thid + 3*offset] += dCy * dPfx / (dLx * dLy);
 	      if (nAdjPID > nPID)
 		{
-		  sData[thid + 4*offset] += dDVij * dSigma * (1.0 - dDij / dSigma) / (dAlpha * dL * dL);
+		  sData[thid + 4*offset] += dDVij * dSigma * (1.0 - dDij / dSigma) / (dAlpha * dLx * dLy);
 		}
 	    }
 	}
@@ -195,22 +195,22 @@ void Spherocyl_Box::calculate_stress_energy()
     {
     case HARMONIC:
       calc_se <HARMONIC> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
-	(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dL, m_dGamma, d_pdX, d_pdY, 
-	 d_pdPhi, d_pdR, d_pdA, d_pdFx, d_pdFy, d_pdFt, d_pfSE);
+	(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma,
+	d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdFx, d_pdFy, d_pdFt, d_pfSE);
       break;
     case HERTZIAN:
       calc_se <HERTZIAN> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
-	(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dL, m_dGamma, d_pdX, d_pdY, 
-	 d_pdPhi, d_pdR, d_pdA, d_pdFx, d_pdFy, d_pdFt, d_pfSE);
+	(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma,
+	d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdFx, d_pdFy, d_pdFt, d_pfSE);
     }
   cudaThreadSynchronize();
   checkCudaError("Calculating stresses and energy");
 }
 
 
-__global__ void find_contact(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL,
-			     double dGamma, double *pdX, double *pdY, double *pdPhi,
-			     double *pdR, double *pdA, int *nContacts)
+__global__ void find_contact(int nSpherocyls, int *pnNPP, int *pnNbrList,
+				 double dLx, double dLy, double dGamma, double *pdX, double *pdY,
+				 double *pdPhi, double *pdR, double *pdA, int *nContacts)
 {
   // Declare shared memory pointer, the size is determined at the kernel launch
   extern __shared__ int sCont[];
@@ -238,8 +238,8 @@ __global__ void find_contact(int nSpherocyls, int *pnNPP, int *pnNbrList, double
 	  double dSigma = dR + pdR[nAdjPID];
 	  double dB = pdA[nAdjPID];
 	  // Make sure we take the closest distance considering boundary conditions
-	  dDeltaX += dL * ((dDeltaX < -0.5*dL) - (dDeltaX > 0.5*dL));
-	  dDeltaY += dL * ((dDeltaY < -0.5*dL) - (dDeltaY > 0.5*dL));
+	  dDeltaX += dLx * ((dDeltaX < -0.5*dLx) - (dDeltaX > 0.5*dLx));
+	  dDeltaY += dLy * ((dDeltaY < -0.5*dLy) - (dDeltaY > 0.5*dLy));
 	  // Transform from shear coordinates to lab coordinates
 	  dDeltaX += dGamma * dDeltaY;
 
@@ -321,8 +321,8 @@ bool Spherocyl_Box::check_for_contacts()
   
   int nSMSize = m_nBlockSize * sizeof(int);
   find_contact <<<m_nGridSize, m_nBlockSize, nSMSize>>>
-    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dL, m_dGamma, d_pdX, d_pdY, 
-     d_pdPhi, d_pdR, d_pdA, pnContacts);
+    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma,
+    d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, pnContacts);
   cudaThreadSynchronize();
 
   int nContacts;

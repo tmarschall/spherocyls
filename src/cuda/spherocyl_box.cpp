@@ -33,13 +33,13 @@ void Spherocyl_Box::configure_cells()
   double dWMin = 2.24 * (m_dRMax + m_dAMax) + m_dEpsilon;
   double dHMin = 2 * (m_dRMax + m_dAMax) + m_dEpsilon;
 
-  m_nCellRows = max(static_cast<int>(m_dL / dHMin), 1);
-  m_nCellCols = max(static_cast<int>(m_dL / dWMin), 1);
+  m_nCellRows = max(static_cast<int>(m_dLy / dHMin), 1);
+  m_nCellCols = max(static_cast<int>(m_dLx / dWMin), 1);
   m_nCells = m_nCellRows * m_nCellCols;
   cout << "Cells: " << m_nCells << ": " << m_nCellRows << " x " << m_nCellCols << endl;
 
-  m_dCellW = m_dL / m_nCellCols;
-  m_dCellH = m_dL / m_nCellRows;
+  m_dCellW = m_dLx / m_nCellCols;
+  m_dCellH = m_dLy / m_nCellRows;
   cout << "Cell dimensions: " << m_dCellW << " x " << m_dCellH << endl;
 
   h_pnPPC = new int[m_nCells];
@@ -214,7 +214,7 @@ double Spherocyl_Box::calculate_packing()
     {
       dParticleArea += (4 * h_pdA[p] + D_PI * h_pdR[p]) * h_pdR[p];
     }
-  return dParticleArea / (m_dL * m_dL);
+  return dParticleArea / (m_dLx * m_dLy);
 }
 
 // Creates the class
@@ -224,7 +224,8 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double dAspect, double 
   assert(nSpherocyls > 0);
   m_nSpherocyls = nSpherocyls;
   assert(dL > 0.0);
-  m_dL = dL;
+  m_dLx = dL;
+  m_dLy = dL;
   m_ePotential = ePotential;
 
   m_dEpsilon = dEpsilon;
@@ -299,6 +300,87 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double dAspect, double 
   //display(0,0,0,0);
   
 }
+Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dLx, double dLy, double dAspect, double dBidispersity, Config config, double dEpsilon, int nMaxPPC, int nMaxNbrs, Potential ePotential)
+{
+  assert(nSpherocyls > 0);
+  m_nSpherocyls = nSpherocyls;
+  assert(dL > 0.0);
+  m_dLx = dLx;
+  m_dLy = dLy;
+  m_ePotential = ePotential;
+
+  m_dEpsilon = dEpsilon;
+  m_nMaxPPC = nMaxPPC;
+  m_nMaxNbrs = nMaxNbrs;
+  if (dBidispersity >= 1) {
+    m_dRMax = 0.5*dBidispersity;
+  }
+  else {
+    m_dRMax = 0.5;
+  }
+  m_dAMax = m_dRMax*dAspect;
+  m_nDeviceMem = 0;
+
+  // This allocates the coordinate data as page-locked memory, which
+  //  transfers faster, since they are likely to be transferred often
+  cudaHostAlloc((void**)&h_pdX, nSpherocyls*sizeof(double), 0);
+  cudaHostAlloc((void**)&h_pdY, nSpherocyls*sizeof(double), 0);
+  cudaHostAlloc((void**)&h_pdPhi, nSpherocyls*sizeof(double), 0);
+  cudaHostAlloc((void**)&h_pdR, nSpherocyls*sizeof(double), 0);
+  cudaHostAlloc((void**)&h_pdA, nSpherocyls*sizeof(double), 0);
+  cudaHostAlloc((void**)&h_pnMemID, nSpherocyls*sizeof(int), 0);
+  m_dPacking = 0;
+  // This initializes the arrays on the GPU
+  cudaMalloc((void**) &d_pdX, sizeof(double)*nSpherocyls);
+  cudaMalloc((void**) &d_pdY, sizeof(double)*nSpherocyls);
+  cudaMalloc((void**) &d_pdPhi, sizeof(double)*nSpherocyls);
+  cudaMalloc((void**) &d_pdR, sizeof(double)*nSpherocyls);
+  cudaMalloc((void**) &d_pdA, sizeof(double)*nSpherocyls);
+  cudaMalloc((void**) &d_pnInitID, sizeof(int)*nSpherocyls);
+  cudaMalloc((void**) &d_pnMemID, sizeof(int)*nSpherocyls);
+  // Spherocylinders
+  m_nDeviceMem += nSpherocyls*(5*sizeof(double) + 2*sizeof(int));
+#if GOLD_FUNCS == 1
+  g_pdX = new double[nSpherocyls];
+  g_pdY = new double[nSpherocyls];
+  g_pdPhi = new double[nSpherocyls];
+  g_pdR = new double[nSpherocyls];
+  g_pdA = new double[nSpherocyls];
+  g_pnInitID = new int[nSpherocyls];
+  g_pnMemID = new int[nSpherocyls];
+#endif
+
+  construct_defaults();
+  cout << "Memory allocated on device (MB): " << (double)m_nDeviceMem / (1024.*1024.) << endl;
+  /*
+  switch (config) {
+  case RANDOM:
+    place_random_spherocyls(0,1,dBidispersity);
+    break;
+  case RANDOM_ALIGNED:
+    place_random_spherocyls(0,0,dBidispersity);
+    break;
+  case ZERO_E:
+    place_random_0e_spherocyls(0,1,dBidispersity);
+    break;
+  case ZERO_E_ALIGNED:
+    place_random_0e_spherocyls(0,0,dBidispersity);
+    break;
+  case GRID:
+    place_spherocyl_grid(0,1);
+    break;
+  case GRID_ALIGNED:
+    place_spherocyl_grid(0,0);
+    break;
+  }
+  */
+  place_spherocyls(config,0,dBidispersity);
+
+  m_dPacking = calculate_packing();
+  cout << "Random spherocyls placed" << endl;
+  //display(0,0,0,0);
+
+}
 // Create class with coordinate arrays provided
 Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double *pdX, 
 			     double *pdY, double *pdPhi, double *pdR, 
@@ -308,7 +390,8 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double *pdX,
   assert(nSpherocyls > 0);
   m_nSpherocyls = nSpherocyls;
   assert(dL > 0);
-  m_dL = dL;
+  m_dLx = dL;
+  m_dLy = dL;
   m_ePotential = ePotential;
 
   m_dEpsilon = dEpsilon;
@@ -490,7 +573,7 @@ void Spherocyl_Box::display(bool bParticles, bool bCells, bool bNeighbors, bool 
       cudaThreadSynchronize();
       checkCudaError("Display: copying particle data to host");
       
-      cout << endl << "Box dimension: " << m_dL << endl;;
+      cout << endl << "Box dimension: " << m_dLx << " x " << m_dLy << endl;;
       for (int p = 0; p < m_nSpherocyls; p++)
 	{
 	  int m = h_pnMemID[p];
@@ -578,8 +661,8 @@ bool Spherocyl_Box::check_for_contacts(int nIndex, double dTol)
 
     double dDelX = dX - dXj;
     double dDelY = dY - dYj;
-    dDelX += m_dL * ((dDelX < -0.5*m_dL) - (dDelX > 0.5*m_dL));
-    dDelY += m_dL * ((dDelY < -0.5*m_dL) - (dDelY > 0.5*m_dL));
+    dDelX += m_dLx * ((dDelX < -0.5*m_dLx) - (dDelX > 0.5*m_dLx));
+    dDelY += m_dLy * ((dDelY < -0.5*m_dLy) - (dDelY > 0.5*m_dLy));
     dDelX += m_dGamma * dDelY;
     double dDelRSqr = dDelX * dDelX + dDelY * dDelY;
     if (dDelRSqr < dS*dS) {
@@ -593,8 +676,8 @@ bool Spherocyl_Box::check_for_contacts(int nIndex, double dTol)
 	double dSigma = dR + h_pdR[p];
 	double dB = h_pdA[p];
 	// Make sure we take the closest distance considering boundary conditions
-	dDeltaX += m_dL * ((dDeltaX < -0.5*m_dL) - (dDeltaX > 0.5*m_dL));
-	dDeltaY += m_dL * ((dDeltaY < -0.5*m_dL) - (dDeltaY > 0.5*m_dL));
+	dDeltaX += m_dLx * ((dDeltaX < -0.5*m_dLx) - (dDeltaX > 0.5*m_dLx));
+	dDeltaY += m_dLy * ((dDeltaY < -0.5*m_dLy) - (dDeltaY > 0.5*m_dLy));
 	// Transform from shear coordinates to lab coordinates
 	dDeltaX += m_dGamma * dDeltaX;
 	
@@ -647,8 +730,8 @@ bool Spherocyl_Box::check_for_crosses(int nIndex, double dEpsilon)
     double dSigma = dR + h_pdR[p];
     double dB = h_pdA[p];
     // Make sure we take the closest distance considering boundary conditions
-    dDeltaX += m_dL * ((dDeltaX < -0.5*m_dL) - (dDeltaX > 0.5*m_dL));
-    dDeltaY += m_dL * ((dDeltaY < -0.5*m_dL) - (dDeltaY > 0.5*m_dL));
+    dDeltaX += m_dLx * ((dDeltaX < -0.5*m_dLx) - (dDeltaX > 0.5*m_dLx));
+    dDeltaY += m_dLy * ((dDeltaY < -0.5*m_dLy) - (dDeltaY > 0.5*m_dLy));
     // Transform from shear coordinates to lab coordinates
     dDeltaX += m_dGamma * dDeltaX;
     
@@ -702,8 +785,8 @@ void Spherocyl_Box::place_random_0e_spherocyls(int seed, bool bRandAngle, double
   cudaMemcpyAsync(d_pnMemID, h_pnMemID, sizeof(int)*m_nSpherocyls, cudaMemcpyHostToDevice);
   cudaThreadSynchronize();
 
-  h_pdX[0] = m_dL * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
-  h_pdY[0] = m_dL * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
+  h_pdX[0] = m_dLx * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
+  h_pdY[0] = m_dLy * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
   if (bRandAngle)
     h_pdPhi[0] = 2*D_PI * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
   else
@@ -714,8 +797,8 @@ void Spherocyl_Box::place_random_0e_spherocyls(int seed, bool bRandAngle, double
     int nTries = 0;
 
     while (bContact) {
-      h_pdX[p] = m_dL * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
-      h_pdY[p] = m_dL * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
+      h_pdX[p] = m_dLx * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
+      h_pdY[p] = m_dLy * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
       if (bRandAngle)
 	h_pdPhi[p] = 2*D_PI * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
       else
@@ -755,8 +838,8 @@ void Spherocyl_Box::place_random_spherocyls(int seed, bool bRandAngle, double dB
   cudaMemcpyAsync(d_pnMemID, h_pnMemID, sizeof(int)*m_nSpherocyls, cudaMemcpyHostToDevice);
   cudaThreadSynchronize();
 
-  h_pdX[0] = m_dL * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
-  h_pdY[0] = m_dL * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
+  h_pdX[0] = m_dLx * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
+  h_pdY[0] = m_dLy * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
   if (bRandAngle)
     h_pdPhi[0] = 2*D_PI * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
   else
@@ -767,8 +850,8 @@ void Spherocyl_Box::place_random_spherocyls(int seed, bool bRandAngle, double dB
     int nTries = 0;
 
     while (bContact) {
-      h_pdX[p] = m_dL * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
-      h_pdY[p] = m_dL * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
+      h_pdX[p] = m_dLx * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
+      h_pdY[p] = m_dLy * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
       if (bRandAngle)
 	h_pdPhi[p] = 2*D_PI * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
       else
@@ -795,8 +878,8 @@ void Spherocyl_Box::place_spherocyl_grid(int seed, bool bRandAngle)
   double dCols = sqrt(m_nSpherocyls/dAspect);
   int nRows = int(dAspect*dCols);
   int nCols = int(dCols);
-  double dWidth = m_dL/nCols;
-  double dHeight = m_dL/nRows;
+  double dWidth = m_dLx/nCols;
+  double dHeight = m_dLy/nRows;
   if (dWidth < 2*(m_dAMax+m_dRMax) || dHeight < 2*m_dRMax) {
     cerr << "Error: Spherocylinders will not fit into square grid, change the number or size of box" << endl;
     exit(1);
@@ -882,8 +965,8 @@ void Spherocyl_Box::place_spherocyls(Config config, int seed, double dBidispersi
      cudaMemcpyAsync(d_pnMemID, h_pnMemID, sizeof(int)*m_nSpherocyls, cudaMemcpyHostToDevice);
      cudaThreadSynchronize();
      
-     h_pdX[0] = m_dL * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
-     h_pdY[0] = m_dL * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
+     h_pdX[0] = m_dLx * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
+     h_pdY[0] = m_dLy * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
      h_pdPhi[0] = config.minAngle + (config.maxAngle - config.minAngle) * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
      
      for (int p = 1; p < m_nSpherocyls; p++) {
@@ -891,8 +974,8 @@ void Spherocyl_Box::place_spherocyls(Config config, int seed, double dBidispersi
        int nTries = 0;
        
        while (bContact) {
-	 h_pdX[p] = m_dL * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
-	 h_pdY[p] = m_dL * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
+	 h_pdX[p] = m_dLx * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
+	 h_pdY[p] = m_dLy * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
 	 h_pdPhi[p] = config.minAngle + (config.maxAngle - config.minAngle) * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
 	 
 	 if (config.overlap >= 1)

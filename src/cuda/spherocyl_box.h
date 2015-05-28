@@ -32,7 +32,8 @@ class Spherocyl_Box
 {
  private:
   int m_nSpherocyls;
-  double m_dL;  // Box side length
+  double m_dLx;  // Box side length
+  double m_dLy;
   double m_dPacking;  // Packing fraction
   double m_dGamma;   // Strain parameter
   double m_dTotalGamma;
@@ -167,9 +168,15 @@ class Spherocyl_Box
   Spherocyl_Box(int nSpherocyls, double dL, double dAspect, double dBidispersity, 
 		Config config, double dEpsilon = 0.1,  int nMaxPPC = 18, 
 		int nMaxNbrs = 40, Potential ePotential = HARMONIC);
+  Spherocyl_Box(int nSpherocyls, double dLx, double dLy, double dAspect,
+		double dBidispersity, Config config, double dEpsilon = 0.1,
+		int nMaxPPC = 18, int nMaxNbrs = 40, Potential ePotential = HARMONIC);
   Spherocyl_Box(int nSpherocyls, double dL, double *pdX, double *pdY, 
 		double *pdPhi, double *pdR, double *pdA, double dEpsilon = 0.1,
 		int nMaxPPC = 18, int nMaxNbrs = 40, Potential ePotential = HARMONIC);
+  Spherocyl_Box(int nSpherocyls, double dLx, double dLy, double *pdX, double *pdY,
+  		double *pdPhi, double *pdR, double *pdA, double dEpsilon = 0.1,
+  		int nMaxPPC = 18, int nMaxNbrs = 40, Potential ePotential = HARMONIC);
   ~Spherocyl_Box();
 
   void place_random_spherocyls(int seed = 0, bool bRandAngle = 1, double dBidispersity = 1);
@@ -179,6 +186,7 @@ class Spherocyl_Box
   void find_neighbors();
   void set_back_gamma();
   void flip_shear_direction();
+  void rotate_by_gamma();
   void reorder_particles();
   void reset_IDs();
   void calculate_stress_energy();

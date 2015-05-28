@@ -60,7 +60,7 @@ __global__ void find_rot_consts(int nSpherocyls, double *pdMOI, double *pdIsoCoe
 //  not all of these particles will get added to the cell list
 ///////////////////////////////////////////////////////////////
 __global__ void find_cells(int nSpherocyls, int nMaxPPC, double dCellW, double dCellH,
-			   int nCellCols, double dL, double *pdX, double *pdY, 
+			   int nCellCols, double x, double dLy, double *pdX, double *pdY,
 			   int *pnCellID, int *pnPPC, int *pnCellList)
 {
   // Assign each thread a unique ID accross all thread-blocks, this is its particle ID
@@ -73,24 +73,24 @@ __global__ void find_cells(int nSpherocyls, int nMaxPPC, double dCellW, double d
     
     // I often allow the stored coordinates to drift slightly outside the box limits
     //  until 
-    if (dY > dL)
+    if (dY > dLy)
       {
-	dY -= dL;
+	dY -= dLy;
 	pdY[nPID] = dY;
       }
     else if (dY < 0)
       {
-	dY += dL;
+	dY += dLy;
 	pdY[nPID] = dY;
       }
-    if (dX > dL)
+    if (dX > dLx)
       {
-	dX -= dL;
+	dX -= dLx;
 	pdX[nPID] = dX;
       }
     else if (dX < 0)
       {
-	dX += dL;
+	dX += dLx;
 	pdX[nPID] = dX;
       }
 
@@ -125,7 +125,7 @@ __global__ void find_cells(int nSpherocyls, int nMaxPPC, double dCellW, double d
 __global__ void find_nbrs(int nSpherocyls, int nMaxPPC, int *pnCellID, int *pnPPC, 
 			  int *pnCellList, int *pnAdjCells, int nMaxNbrs, int *pnNPP, 
 			  int *pnNbrList, double *pdX, double *pdY, double *pdR, 
-			  double *pdA, double dEpsilon, double dL, double dGamma)
+			  double *pdA, double dEpsilon, double dLx, double dLy, double dGamma)
 {
   int nPID = threadIdx.x + blockIdx.x * blockDim.x;
   int nThreads = gridDim.x * blockDim.x;
@@ -149,12 +149,12 @@ __global__ void find_nbrs(int nSpherocyls, int nMaxPPC, int *pnCellID, int *pnPP
 	    {
 	      double dSigma = dR + dA + pdR[nAdjPID] + pdA[nAdjPID] + dEpsilon;
 	      double dDeltaY = dY - pdY[nAdjPID];
-	      dDeltaY += dL * ((dDeltaY < -0.5 * dL) - (dDeltaY > 0.5 * dL));
+	      dDeltaY += dLy * ((dDeltaY < -0.5 * dLy) - (dDeltaY > 0.5 * dLy));
 	      
 	      if (fabs(dDeltaY) < dSigma)
 		{
 		  double dDeltaX = dX - pdX[nAdjPID];
-		  dDeltaX += dL * ((dDeltaX < -0.5 * dL) - (dDeltaX > 0.5 * dL));
+		  dDeltaX += dLx * ((dDeltaX < -0.5 * dLx) - (dDeltaX > 0.5 * dLx));
 		  double dDeltaRx = dDeltaX + dGamma * dDeltaY;
 		  double dDeltaRx2 = dDeltaX + 0.5 * dDeltaY;
 		  if (fabs(dDeltaRx) < dSigma || fabs(dDeltaRx2) < dSigma)
@@ -183,12 +183,12 @@ __global__ void find_nbrs(int nSpherocyls, int nMaxPPC, int *pnCellID, int *pnPP
 	      double dDeltaY = dY - pdY[nAdjPID];
 		
 	      // Make sure were finding the closest separation
-	      dDeltaY += dL * ((dDeltaY < -0.5 * dL) - (dDeltaY > 0.5 * dL));
+	      dDeltaY += dLy * ((dDeltaY < -0.5 * dLy) - (dDeltaY > 0.5 * dLy));
 	      
 	      if (fabs(dDeltaY) < dSigma)
 		{
 		  double dDeltaX = dX - pdX[nAdjPID];
-		  dDeltaX += dL * ((dDeltaX < -0.5 * dL) - (dDeltaX > 0.5 * dL));
+		  dDeltaX += dLx * ((dDeltaX < -0.5 * dLx) - (dDeltaX > 0.5 * dLx));
 		  
 		  // Go to unsheared coordinates
 		  double dDeltaRx = dDeltaX + dGamma * dDeltaY;
@@ -233,7 +233,7 @@ void Spherocyl_Box::find_neighbors()
 
   find_cells <<<m_nGridSize, m_nBlockSize>>>
     (m_nSpherocyls, m_nMaxPPC, m_dCellW, m_dCellH, m_nCellCols, 
-     m_dL, d_pdX, d_pdY, d_pnCellID, d_pnPPC, d_pnCellList);
+     m_dLx, m_dLy, d_pdX, d_pdY, d_pnCellID, d_pnPPC, d_pnCellList);
   cudaThreadSynchronize();
   checkCudaError("Finding cells");
 
@@ -241,7 +241,7 @@ void Spherocyl_Box::find_neighbors()
   find_nbrs <<<m_nGridSize, m_nBlockSize>>>
     (m_nSpherocyls, m_nMaxPPC, d_pnCellID, d_pnPPC, d_pnCellList, d_pnAdjCells,
      m_nMaxNbrs, d_pnNPP, d_pnNbrList, d_pdX, d_pdY, d_pdR, d_pdA, 
-     m_dEpsilon, m_dL, m_dGamma);
+     m_dEpsilon, m_dLx, m_dLy, m_dGamma);
   cudaThreadSynchronize();
   checkCudaError("Finding neighbors");
 
@@ -273,7 +273,7 @@ void Spherocyl_Box::find_neighbors()
 //  also finds the cells in the process
 //
 ///////////////////////////////////////////////////////////////////////////////////
-__global__ void set_back_coords(int nSpherocyls, double dL, double *pdX, double *pdY, double *pdPhi)
+__global__ void set_back_coords(int nSpherocyls, double dLx, dLy, double *pdX, double *pdY, double *pdPhi)
 {
   // Assign each thread a unique ID accross all thread-blocks, this is its particle ID
   int nPID = threadIdx.x + blockIdx.x * blockDim.x;
@@ -295,14 +295,14 @@ __global__ void set_back_coords(int nSpherocyls, double dL, double *pdX, double 
 	dPhi += 2*D_PI;
 	pdPhi[nPID] = dPhi;
       }
-    if (dY > dL)
+    if (dY > dLy)
       {
-	dY -= dL;
+	dY -= dLy;
 	pdY[nPID] = dY;
       }
     else if (dY < 0)
       {
-	dY += dL;
+	dY += dLy;
 	pdY[nPID] = dY;
       }
     
@@ -310,11 +310,11 @@ __global__ void set_back_coords(int nSpherocyls, double dL, double *pdX, double 
     dX += dY;
     if (dX < 0)
       {
-	dX += dL;
+	dX += dLx;
       }
-    while (dX > dL)
+    while (dX > dLx)
       {
-	dX -= dL;
+	dX -= dLx;
       }
     pdX[nPID] = dX;
 
@@ -353,7 +353,7 @@ void Spherocyl_Box::set_back_gamma()
 */
 
   set_back_coords <<<m_nGridSize, m_nBlockSize>>> 
-    (m_nSpherocyls, m_dL, d_pdX, d_pdY, d_pdPhi);
+    (m_nSpherocyls, m_dLx, m_dLy, d_pdX, d_pdY, d_pdPhi);
   cudaThreadSynchronize();
   checkCudaError("Finding new coordinates, cells");
   m_dGamma -= 1;
@@ -386,7 +386,7 @@ void Spherocyl_Box::set_back_gamma()
 //  used for reordering particles
 /////////////////////////////////////////////////////////////////////////
 __global__ void find_cells_nomax(int nSpherocyls, double dCellW, double dCellH,
-				 int nCellCols, double dL, double *pdX, double *pdY, 
+				 int nCellCols, double dLx, double dLy, double *pdX, double *pdY,
 				 int *pnCellID, int *pnPPC)
 {
   // Assign each thread a unique ID accross all thread-blocks, this is its particle ID
@@ -399,17 +399,17 @@ __global__ void find_cells_nomax(int nSpherocyls, double dCellW, double dCellH,
     
     // Particles are allowed to drift slightly outside the box limits
     //  until cells are reassigned due to a particle drift of dEpsilon/2 
-    if (dY > dL) {
-      dY -= dL; 
+    if (dY > dLy) {
+      dY -= dLy;
       pdY[nPID] = dY; }
     else if (dY < 0) {
-      dY += dL;
+      dY += dLy;
       pdY[nPID] = dY; }
-    if (dX > dL) {
-      dX -= dL; 
+    if (dX > dLx) {
+      dX -= dLx;
       pdX[nPID] = dX; }
     else if (dX < 0) {
-      dX += dL;
+      dX += dLx;
       pdX[nPID] = dX; }
 
     //find the cell ID, add a particle to that cell 
@@ -472,7 +472,7 @@ void Spherocyl_Box::reorder_particles()
   //find particle cell IDs and number of particles in each cell
   find_cells_nomax <<<m_nGridSize, m_nBlockSize>>>
     (m_nSpherocyls, m_dCellW, m_dCellH, m_nCellCols, 
-     m_dL, d_pdX, d_pdY, d_pnCellID, d_pnPPC);
+     m_dLx, m_dLy, d_pdX, d_pdY, d_pnCellID, d_pnPPC);
   cudaThreadSynchronize();
   checkCudaError("Reordering particles: Finding cells");
 
@@ -559,7 +559,7 @@ void Spherocyl_Box::flip_shear_direction()
 	cudaMemset((void *) d_bNewNbrs, 0, sizeof(int));
 
 	reflect_yaxis <<<m_nGridSize, m_nBlockSize>>>
-	    (m_nSpherocyls, d_pdX, d_pdPhi, m_dL);
+	    (m_nSpherocyls, d_pdX, d_pdPhi, m_dLx);
 	cudaThreadSynchronize();
 	checkCudaError("Finding new coordinates, cells");
 	m_dGamma = -m_dGamma;
@@ -567,26 +567,70 @@ void Spherocyl_Box::flip_shear_direction()
 	find_neighbors();
 }
 
-/*
-__global__ void rotate(int nParticles, double *pdX, double *pdY, double *pdPhi, double dL, double dGamma, double dTheta)
+
+__global__ void gamma_rotate(int nParticles, double *pdX, double *pdY, double *pdPhi, double dLx, double dLy, double dGamma)
 {
   int nPID = threadIdx.x + blockDim.x*blockIdx.x;
   int nThreads = blockDim.x * gridDim.x;
 
   while (nPID < nParticles) {
     double dY = pdY[nPID];
-    double dX = pdX[nPID] + dGamma*dY;
-    double dCosQ = cos(dTheta);
-    double dSinQ = sin(dTheta);
-    double dRotX = dX*dCosQ - dY*dSinQ;
-    double dRotY = dX*dSinQ + dY*dCosQ;
-    dRotX += dL*((dRotX < 0) - (dRotX > dL));
-    dRotY += dL*((dRotY < 0) - (dRotY > dL));
+    double dX = pdX[nPID];
+    double dNewX = signbit(dGamma)*dY*sqrt(1+dGamma*dGamma);
+    double dNewY = -signbit(dGamma)*dX/sqrt(1+dGamma*dGamma);
+    double dNewPhi;
+    if (dGamma != 0)
+    	dNewPhi = pdPhi[nPID] - atan(1/dGamma);
+    else
+    	dNewPhi = pdPhi[nPID] -= pi/2;
 
-    pdX[nPID] = dRotX;
-    pdY[nPID] = dRotY;
-    pdPhi[nPID] += dTheta;
+    if (dNewPhi > D_PI) {
+    	dNewPhi -= 2*D_PI;
+    	pdPhi[nPID] = dNewPhi;
+    }
+    else if (dNewPhi < -D_PI) {
+    	dNewPhi += 2*D_PI;
+    	pdNewPhi[nPID] = dPhi;
+    }
+    if (dNewY > dLy) {
+    	dNewY -= dLy;
+    	pdY[nPID] = dNewY;
+    }
+    else if (dNewY < 0) {
+    	dNewY += dLy;
+    	pdY[nPID] = dNewY;
+    }
+    if (dNewX < 0) {
+    	dNewX += dLx;
+    	pdX[nPID] = dNewX;
+    }
+    else if (dNewX > dLx) {
+    	dNewX -= dLx;
+    	pdX[nPID] = dNewX;
+    }
+
     nPID += nThreads;
   }
 }
-*/
+
+void Spherocyl_Box::rotate_by_gamma()
+{
+	cudaMemset((void *) d_pnPPC, 0, sizeof(int)*m_nCells);
+	cudaMemset((void *) d_pdXMoved, 0, sizeof(double)*m_nSpherocyls);
+	cudaMemset((void *) d_pdYMoved, 0, sizeof(double)*m_nSpherocyls);
+	cudaMemset((void *) d_bNewNbrs, 0, sizeof(int));
+
+	gamma_rotate <<<m_nGridSize, m_nBlockSize>>>
+	    (m_nSpherocyls, d_pdX, d_pdY, d_pdPhi, m_dLx, m_dLy, m_dGamma);
+	cudaThreadSynchronize();
+	checkCudaError("Finding new coordinates, cells");
+
+	double dLx = m_dLx;
+	double dLy = m_dLy;
+	m_dLx = dLy*sqrt(1+m_dGamma*m_dGamma);
+	m_dLy = dLx/sqrt(1+m_dGamma*m_dGamma);
+	m_dGamma = -m_dGamma;
+
+	find_neighbors();
+}
+

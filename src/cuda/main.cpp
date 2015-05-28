@@ -81,7 +81,7 @@ int main(int argc, char* argv[])
   cout << dStressSaveRate << endl;
   double dDR = float_input(argc, argv, ++argn, "Cell padding");
   cout << dDR << endl;
-  bool bFlipShear = (bool)int_input(argc, argv, ++argn, "Reverse shear direction (1 to reverse)");
+  int nChangeShear = int_input(argc, argv, ++argn, "Change shear direction (1 to reverse, 2 to rotate by gamma)");
   cout << bFlipShear << endl;
 
   if (dStressSaveRate < dStrainRate * dStep)
@@ -90,6 +90,8 @@ int main(int argc, char* argv[])
     dPosSaveRate = dStrainRate;
 
   double dL;
+  double dLx = 0;
+  double dLy = 0;
   double *dX = new double[nSpherocyls];
   double *dY = new double[nSpherocyls];
   double *dPhi = new double[nSpherocyls];
@@ -168,6 +170,7 @@ int main(int argc, char* argv[])
   {
     cout << "Loading file: " << strFile << endl;
     DatFileInput cData(szFile, 1);
+    int nHeadLen = cData.getHeadLen();
 
     if (cData.getHeadInt(0) != nSpherocyls) {
     	cout << "Warning: Number of particles in data file may not match requested number" << endl;
@@ -178,10 +181,19 @@ int main(int argc, char* argv[])
     cData.getColumn(dPhi, 2);
     cData.getColumn(dRad, 3);
     cData.getColumn(dA, 4);
-    dL = cData.getHeadFloat(1);
-    dPacking = cData.getHeadFloat(2);
-    dGamma = cData.getHeadFloat(3);
-    dTotalGamma = cData.getHeadFloat(4);
+    if (nHeadLen == 8) {
+    	dLx = cData.getHeadFloat(1);
+    	dLy = cData.getHeadFloat(2);
+    	dPacking = cData.getHeadFloat(3);
+    	dGamma = cData.getHeadFloat(4);
+    	dTotalGamma = cData.getHeadFloat(5);
+    }
+    else {
+    	dL = cData.getHeadFloat(1);
+    	dPacking = cData.getHeadFloat(2);
+    	dGamma = cData.getHeadFloat(3);
+       	dTotalGamma = cData.getHeadFloat(4);
+    }
     if (cData.getHeadFloat(5) != dStrainRate) {
       cerr << "Warning: Strain rate in data file does not match the requested rate" << endl;
     }
@@ -207,8 +219,14 @@ int main(int argc, char* argv[])
     cSpherocyls = new Spherocyl_Box(nSpherocyls, dL, dAspect, dBidispersity, sConfig, dDR);
   }
   else {
-    cout << "Initializing box from file of length " << dL << " with " << nSpherocyls << " particles." << endl;
-    cSpherocyls = new Spherocyl_Box(nSpherocyls, dL, dX, dY, dPhi, dRad, dA, dDR);
+	if (dLy == 0) {
+		cout << "Initializing box from file of length " << dL << " with " << nSpherocyls << " particles." << endl;
+		cSpherocyls = new Spherocyl_Box(nSpherocyls, dL, dX, dY, dPhi, dRad, dA, dDR);
+	}
+	else {
+		cout << "Initializing box from file of length " << dLx << " x " << dLy << " with " << nSpherocyls << " particles." << endl;
+		cSpherocyls = new Spherocyl_Box(nSpherocyls, dLx, dLy, dX, dY, dPhi, dRad, dA, dDR);
+	}
   }
   cout << "Spherocyls initialized" << endl;
 
@@ -218,9 +236,13 @@ int main(int argc, char* argv[])
   cSpherocyls->set_step(dStep);
   cSpherocyls->set_data_dir(szDir);
   cout << "Configuration set" << endl;
-  if (bFlipShear) {
+  if (nChangeShear == 1) {
 	  cSpherocyls->flip_shear_direction();
-	  cout << "Shear direction reversed" <<  endl;
+	  cout << "Shear direction reversed" << endl;
+  }
+  else if (nChangeShear == 2) {
+	  cSpherocyls->rotate_by_gamma();
+	  cout << "Shear direction rotated" << endl;
   }
   
   //cSpherocyls.place_random_spherocyls();
