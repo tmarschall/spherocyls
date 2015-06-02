@@ -969,10 +969,11 @@ void Spherocyl_Box::resize_step(long unsigned int tTime, double dEpsilon, bool b
 	checkCudaError("Updating estimates, moving particles");
 
 	cudaMemcpyAsync(h_bNewNbrs, d_bNewNbrs, sizeof(int), cudaMemcpyDeviceToHost);
+	reconfigure_cells();
 	cudaThreadSynchronize();
+
 	if (*h_bNewNbrs)
 	  find_neighbors();
-
 }
 
 void Spherocyl_Box::resize_box(long unsigned int nStart, double dEpsilon, double dFinalPacking, double dSvStressRate, double dSvPosRate)

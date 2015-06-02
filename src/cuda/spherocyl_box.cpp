@@ -19,6 +19,29 @@ using namespace std;
 
 const double D_PI = 3.14159265358979;
 
+
+void Spherocyl_Box::reconfigure_cells()
+{
+  double dWMin = 2.24 * (m_dRMax + m_dAMax) + m_dEpsilon;
+  double dHMin = 2 * (m_dRMax + m_dAMax) + m_dEpsilon;
+
+  int nNewCellRows = max(static_cast<int>(m_dLy / dHMin), 1);
+  int nNewCellCols = max(static_cast<int>(m_dLx / dWMin), 1);
+  if (nNewCellRows != m_nCellRows || nNewCellCols != m_nCellCols) {
+    delete[] h_pnPPC; delete[] h_pnCellList; delete[] h_pnAdjCells;
+    cudaFree(d_pnPPC); cudaFree(d_pnCellList); cudaFree(d_pnAdjCells);
+#if GOLD_FUNCS == 1
+    delete[] g_pnPPC; delete[] g_pnCellList; delete[] g_pnAdjCells;
+#endif
+    *h_bNewNbrs = 1;
+    configure_cells();
+  }
+  else {
+    m_dCellW = m_dLx / m_nCellCols;
+    m_dCellH = m_dLy / m_nCellRows;
+  }
+}
+
 // Just setting things up here
 //  configure_cells() decides how the space should be divided into cells
 //  and which cells are next to each other
@@ -304,7 +327,7 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dLx, double dLy, double dAs
 {
   assert(nSpherocyls > 0);
   m_nSpherocyls = nSpherocyls;
-  assert(dL > 0.0);
+  assert(dLx > 0.0 && dLy > 0.0);
   m_dLx = dLx;
   m_dLy = dLy;
   m_ePotential = ePotential;
@@ -382,6 +405,106 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dLx, double dLy, double dAs
 
 }
 // Create class with coordinate arrays provided
+Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dLx, double dLy, double *pdX, 
+			     double *pdY, double *pdPhi, double *pdR, double *pdA, 
+			     double dEpsilon, int nMaxPPC, int nMaxNbrs, Potential ePotential)
+{
+  assert(nSpherocyls > 0);
+  m_nSpherocyls = nSpherocyls;
+  assert(dLx > 0 && dLy > 0);
+  m_dLx = dLx;
+  m_dLy = dLy;
+  m_ePotential = ePotential;
+
+  m_dEpsilon = dEpsilon;
+  m_nMaxPPC = nMaxPPC;
+  m_nMaxNbrs = nMaxNbrs;
+
+  // This allocates the coordinate data as page-locked memory, which 
+  //  transfers faster, since they are likely to be transferred often
+  cudaHostAlloc((void**)&h_pdX, nSpherocyls*sizeof(double), 0);
+  cudaHostAlloc((void**)&h_pdY, nSpherocyls*sizeof(double), 0);
+  cudaHostAlloc((void**)&h_pdPhi, nSpherocyls*sizeof(double), 0);
+  cudaHostAlloc((void**)&h_pdR, nSpherocyls*sizeof(double), 0);
+  cudaHostAlloc((void**)&h_pdA, nSpherocyls*sizeof(double), 0);
+  cudaHostAlloc((void**)&h_pnMemID, nSpherocyls*sizeof(int), 0);
+  m_dRMax = 0.0;
+  m_dAMax = 0.0;
+  //cout << "Loading positions" << endl;
+  for (int p = 0; p < nSpherocyls; p++)
+    {
+	  //cout << "loading p=" << p << endl;
+      h_pdX[p] = pdX[p];
+      h_pdY[p] = pdY[p];
+      h_pdPhi[p] = pdPhi[p];
+      h_pdR[p] = pdR[p];
+      h_pdA[p] = pdA[p];
+      h_pnMemID[p] = p;
+      if (pdR[p] > m_dRMax)
+	m_dRMax = pdR[p];
+      if (pdA[p] > m_dAMax)
+	m_dAMax = pdA[p];
+      while (h_pdX[p] > dLx)
+	h_pdX[p] -= dLx;
+      while (h_pdX[p] < 0)
+	h_pdX[p] += dLx;
+      while (h_pdY[p] > dLy)
+	h_pdY[p] -= dLy;
+      while (h_pdY[p] < 0)
+	h_pdY[p] += dLy;
+    }
+  m_dPacking = calculate_packing();
+  //cout << "Positions loaded" << endl;
+
+  // This initializes the arrays on the GPU
+  cudaMalloc((void**) &d_pdX, sizeof(double)*nSpherocyls);
+  cudaMalloc((void**) &d_pdY, sizeof(double)*nSpherocyls);
+  cudaMalloc((void**) &d_pdPhi, sizeof(double)*nSpherocyls);
+  cudaMalloc((void**) &d_pdR, sizeof(double)*nSpherocyls);
+  cudaMalloc((void**) &d_pdA, sizeof(double)*nSpherocyls);
+  cudaMalloc((void**) &d_pnInitID, sizeof(int)*nSpherocyls);
+  cudaMalloc((void**) &d_pnMemID, sizeof(int)*nSpherocyls);
+  // This copies the values to the GPU asynchronously, which allows the
+  //  CPU to go on and process further instructions while the GPU copies.
+  //  Only workes on page-locked memory (allocated with cudaHostAlloc)
+  cudaMemcpyAsync(d_pdX, h_pdX, sizeof(double)*nSpherocyls, cudaMemcpyHostToDevice);
+  cudaMemcpyAsync(d_pdY, h_pdY, sizeof(double)*nSpherocyls, cudaMemcpyHostToDevice);
+  cudaMemcpyAsync(d_pdPhi, h_pdPhi, sizeof(double)*nSpherocyls, cudaMemcpyHostToDevice);
+  cudaMemcpyAsync(d_pdR, h_pdR, sizeof(double)*nSpherocyls, cudaMemcpyHostToDevice);
+  cudaMemcpyAsync(d_pdA, h_pdA, sizeof(double)*nSpherocyls, cudaMemcpyHostToDevice);
+  cudaMemcpyAsync(d_pnMemID, h_pnMemID, sizeof(int)*nSpherocyls, cudaMemcpyHostToDevice);
+  cudaMemcpyAsync(d_pnInitID, d_pnMemID, sizeof(int)*nSpherocyls, cudaMemcpyDeviceToDevice);
+
+  m_nDeviceMem += nSpherocyls*(5*sizeof(double)+2*sizeof(int));
+
+#if GOLD_FUNCS == 1
+  g_pdX = new double[nSpherocyls];
+  g_pdY = new double[nSpherocyls];
+  g_pdPhi = new double[nSpherocyls];
+  g_pdR = new double[nSpherocyls];
+  g_pdA = new double[nSpherocyls];
+  g_pnInitID = new int[nSpherocyls];
+  g_pnMemID = new int[nSpherocyls];
+  for (int p = 0; p < nSpherocyls; p++)
+    {
+      g_pdX[p] = h_pdX[p];
+      g_pdY[p] = h_pdY[p];
+      g_pdPhi[p] = h_pdPhi[p];
+      g_pdR[p] = h_pdR[p];
+      g_pdA[p] = h_pdA[p];
+      g_pnMemID[p] = h_pnMemID[p];
+      g_pnInitID[p] = g_pnMemID[p];
+    }
+#endif
+
+  //cout << "Positions transfered to device" << endl;
+  construct_defaults();
+  cout << "Memory allocated on device (MB): " << (double)m_nDeviceMem / (1024.*1024.) << endl;
+  // Get spheocyl coordinates from spherocyls
+
+  cudaThreadSynchronize();
+  //display(0,0,0,0);
+}
 Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double *pdX, 
 			     double *pdY, double *pdPhi, double *pdR, 
 			     double *pdA, double dEpsilon, int nMaxPPC, 

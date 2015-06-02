@@ -60,7 +60,7 @@ __global__ void find_rot_consts(int nSpherocyls, double *pdMOI, double *pdIsoCoe
 //  not all of these particles will get added to the cell list
 ///////////////////////////////////////////////////////////////
 __global__ void find_cells(int nSpherocyls, int nMaxPPC, double dCellW, double dCellH,
-			   int nCellCols, double x, double dLy, double *pdX, double *pdY,
+			   int nCellCols, double dLx, double dLy, double *pdX, double *pdY,
 			   int *pnCellID, int *pnPPC, int *pnCellList)
 {
   // Assign each thread a unique ID accross all thread-blocks, this is its particle ID
@@ -273,7 +273,7 @@ void Spherocyl_Box::find_neighbors()
 //  also finds the cells in the process
 //
 ///////////////////////////////////////////////////////////////////////////////////
-__global__ void set_back_coords(int nSpherocyls, double dLx, dLy, double *pdX, double *pdY, double *pdPhi)
+__global__ void set_back_coords(int nSpherocyls, double dLx, double dLy, double *pdX, double *pdY, double *pdPhi)
 {
   // Assign each thread a unique ID accross all thread-blocks, this is its particle ID
   int nPID = threadIdx.x + blockIdx.x * blockDim.x;
@@ -582,7 +582,7 @@ __global__ void gamma_rotate(int nParticles, double *pdX, double *pdY, double *p
     if (dGamma != 0)
     	dNewPhi = pdPhi[nPID] - atan(1/dGamma);
     else
-    	dNewPhi = pdPhi[nPID] -= pi/2;
+    	dNewPhi = pdPhi[nPID] -= D_PI/2;
 
     if (dNewPhi > D_PI) {
     	dNewPhi -= 2*D_PI;
@@ -590,7 +590,7 @@ __global__ void gamma_rotate(int nParticles, double *pdX, double *pdY, double *p
     }
     else if (dNewPhi < -D_PI) {
     	dNewPhi += 2*D_PI;
-    	pdNewPhi[nPID] = dPhi;
+    	pdPhi[nPID] = dNewPhi;
     }
     if (dNewY > dLy) {
     	dNewY -= dLy;

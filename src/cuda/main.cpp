@@ -82,7 +82,7 @@ int main(int argc, char* argv[])
   double dDR = float_input(argc, argv, ++argn, "Cell padding");
   cout << dDR << endl;
   int nChangeShear = int_input(argc, argv, ++argn, "Change shear direction (1 to reverse, 2 to rotate by gamma)");
-  cout << bFlipShear << endl;
+  cout << nChangeShear << endl;
 
   if (dStressSaveRate < dStrainRate * dStep)
     dStressSaveRate = dStrainRate * dStep;

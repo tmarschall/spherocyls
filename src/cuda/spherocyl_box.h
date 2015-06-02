@@ -157,6 +157,7 @@ class Spherocyl_Box
   
   void construct_defaults();
   void configure_cells();
+  void reconfigure_cells();
   void set_kernel_configs();
   double calculate_packing();
   
