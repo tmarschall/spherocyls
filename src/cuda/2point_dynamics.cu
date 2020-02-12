@@ -50,6 +50,7 @@ __global__ void calc_rot_consts(int nSpherocyls, double *pdR, double *pdAs,
 
 ///////////////////////////////////////////////////////////////
 //
+// Deprecated method
 //
 ///////////////////////////////////////////////////////////
 template<Potential ePot, int bCalcStress>
@@ -322,11 +323,17 @@ __global__ void euler_est_sc_2p(int nSpherocyls, int *pnNPP, int *pnNbrList, dou
 } 
 
 
+////////////////////////////////////////////////
+//
+// First step (Newtonian estimate) for integration of e.o.m.
+//  Uses two points of contact along flat sides when applicable
+//
+////////////////////////////////////////////
 template<Potential ePot, int bCalcStress>
-__global__ void euler_est_2p(int nSpherocyls, int *pnNPP, int *pnNbrList, double dLx, double dLy,
-			     double dGamma, double dStrain, double dStep, double *pdX, double *pdY, double *pdPhi,
-			     double *pdR, double *pdA, double *pdMOI, double *pdIsoC, double *pdFx, double *pdFy,
-			     double *pdFt, float *pfSE, double *pdTempX, double *pdTempY, double *pdTempPhi)
+__global__ void euler_est_2p(int nSpherocyls, int *pnNPP, int *pnNbrList, double dLx, double dLy, double dGamma, 
+			     double dStrain, double dStep, double *pdX, double *pdY, double *pdPhi, double *pdR, 
+			     double *pdA, double dKd, double *pdArea, double *pdMOI, double *pdIsoC, double *pdFx, 
+			     double *pdFy, double *pdFt, float *pfSE, double *pdTempX, double *pdTempY, double *pdTempPhi)
 { 
   int thid = threadIdx.x;
   int nPID = thid + blockIdx.x * blockDim.x;
@@ -542,11 +549,15 @@ __global__ void euler_est_2p(int nSpherocyls, int *pnNPP, int *pnNbrList, double
       pdFx[nPID] = dFx;
       pdFy[nPID] = dFy;
       pdFt[nPID] = dFt;
-      
+
+      double dArea = pdArea[nPID];
+      dFx /= (dKd*dArea);
+      dFy /= (dKd*dArea);
+      dFt /= (dKd*dArea*pdMOI[nPID]);
       pdTempX[nPID] = dX + dStep * (dFx - dGamma * dFy);
       pdTempY[nPID] = dY + dStep * dFy;
       double dRIso = 0.5*(1-pdIsoC[nPID]*cos(2*dPhi));
-      pdTempPhi[nPID] = dPhi + dStep * (dFt / pdMOI[nPID] - dStrain * dRIso);
+      pdTempPhi[nPID] = dPhi + dStep * (dFt - dStrain * dRIso);
       
       nPID += nThreads;
     }
@@ -607,11 +618,11 @@ __global__ void euler_est_2p(int nSpherocyls, int *pnNPP, int *pnNbrList, double
 //
 /////////////////////////////////////////////////////////////////
 template<Potential ePot>
-__global__ void heun_corr_2p(int nSpherocyls, int *pnNPP, int *pnNbrList, double dLx, double dLy,
-			     double dGamma, double dStrain, double dStep, double *pdX, double *pdY,
-			     double *pdPhi, double *pdR, double *pdA, double *pdMOI, double *pdIsoC,
-			     double *pdFx, double *pdFy, double *pdFt, double *pdTempX, double *pdTempY,
-			     double *pdTempPhi, double *pdXMoved, double *pdYMoved, double dEpsilon, int *bNewNbrs)
+__global__ void heun_corr_2p(int nSpherocyls, int *pnNPP, int *pnNbrList, double dLx, double dLy, double dGamma, 
+			     double dStrain, double dStep, double *pdX, double *pdY, double *pdPhi, double *pdR, 
+			     double *pdA, double dKd, double *pdArea, double *pdMOI, double *pdIsoC, double *pdFx, 
+			     double *pdFy, double *pdFt, double *pdTempX, double *pdTempY, double *pdTempPhi, 
+			     double *pdXMoved, double *pdYMoved, double dEpsilon, int *bNewNbrs)
 { 
   int thid = threadIdx.x;
   int nPID = thid + blockIdx.x * blockDim.x;
@@ -798,14 +809,18 @@ __global__ void heun_corr_2p(int nSpherocyls, int *pnNPP, int *pnNbrList, double
 	}
       double dMOI = pdMOI[nPID];
       double dIsoC = pdIsoC[nPID];
+      double dArea = pdArea[nPID];
+      dFx /= (dKd*dArea);
+      dFy /= (dKd*dArea);
+      dFt /= (dKd*dArea*dMOI);
       dFx -= dNewGamma * dFy;
-      dFt = dFt / dMOI - dStrain * 0.5 * (1 - dIsoC*cos(2*dPhi));
+      dFt = dFt - dStrain * 0.5 * (1 - dIsoC*cos(2*dPhi));
 
-      double dFy0 = pdFy[nPID];
-      double dFx0 = pdFx[nPID] - dGamma * dFy0;
-      double dPhi0 = pdPhi[nPID];
+      double dFy0 = pdFy[nPID] / (dKd*dArea);
+      double dFx0 = pdFx[nPID] / (dKd*dArea) - dGamma * dFy0;
+      double dPhi0 = pdPhi[nPID] / (dKd*dArea*dMOI);
       
-      double dFt0 = pdFt[nPID] / dMOI - dStrain * 0.5 * (1 - dIsoC*cos(2*dPhi0));
+      double dFt0 = pdFt[nPID] - dStrain * 0.5 * (1 - dIsoC*cos(2*dPhi0));
 
       double dDx = 0.5 * dStep * (dFx0 + dFx);
       double dDy = 0.5 * dStep * (dFy0 + dFy);
@@ -838,14 +853,14 @@ void Spherocyl_Box::strain_step_2p(long unsigned int tTime, bool bSvStress, bool
 	case HARMONIC:
 	  euler_est_2p <HARMONIC, 1> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
 	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, m_dStrainRate,
-	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, d_pdFx, 
-	     d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
+	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC, 
+	     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 	  break;
 	case HERTZIAN:
 	  euler_est_2p <HERTZIAN, 1> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
 	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, m_dStrainRate,
-	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, d_pdFx, 
-	     d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
+	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC, 
+	     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 	}
       cudaThreadSynchronize();
       checkCudaError("Estimating new particle positions, calculating stresses");
@@ -866,13 +881,13 @@ void Spherocyl_Box::strain_step_2p(long unsigned int tTime, bool bSvStress, bool
 	case HARMONIC:
 	  euler_est_2p <HARMONIC, 0> <<<m_nGridSize, m_nBlockSize>>>
 	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, m_dStrainRate,
-	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, 
+	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC, 
 	     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 	  break;
 	case HERTZIAN:
 	  euler_est_2p <HERTZIAN, 0> <<<m_nGridSize, m_nBlockSize>>>
 	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, m_dStrainRate,
-	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, 
+	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC, 
 	     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 	}
       cudaThreadSynchronize();
@@ -884,14 +899,14 @@ void Spherocyl_Box::strain_step_2p(long unsigned int tTime, bool bSvStress, bool
     case HARMONIC:
       heun_corr_2p <HARMONIC> <<<m_nGridSize, m_nBlockSize>>>
 	(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, m_dStrainRate,
-	 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, 
+	 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC, 
 	 d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, d_pdTempPhi, d_pdXMoved, 
 	 d_pdYMoved, m_dEpsilon, d_bNewNbrs);
       break;
     case HERTZIAN:
       heun_corr_2p <HERTZIAN> <<<m_nGridSize, m_nBlockSize>>>
 	(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, m_dStrainRate,
-	 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, 
+	 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC, 
 	 d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, d_pdTempPhi, d_pdXMoved, 
 	 d_pdYMoved, m_dEpsilon, d_bNewNbrs);
     }
@@ -1190,15 +1205,15 @@ void Spherocyl_Box::resize_step_2p(long unsigned int tTime, double dEpsilon, boo
 		{
 		case HARMONIC:
 		  euler_est_2p <HARMONIC, 1> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
-		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
-		     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, d_pdFx,
-		     d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
+		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0, m_dStep, 
+		     d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC, 
+		     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 		  break;
 		case HERTZIAN:
 		  euler_est_2p <HERTZIAN, 1> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
-		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
-		     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, d_pdFx,
-		     d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
+		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0, m_dStep, 
+		     d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC, 
+		     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 		}
 	      cudaThreadSynchronize();
 	      checkCudaError("Estimating new particle positions, calculating stresses");
@@ -1218,14 +1233,14 @@ void Spherocyl_Box::resize_step_2p(long unsigned int tTime, double dEpsilon, boo
 		{
 		case HARMONIC:
 		  euler_est_2p <HARMONIC, 0> <<<m_nGridSize, m_nBlockSize>>>
-		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
-		     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
+		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0, m_dStep, 
+		     d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC,
 		     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 		  break;
 		case HERTZIAN:
 		  euler_est_2p <HERTZIAN, 0> <<<m_nGridSize, m_nBlockSize>>>
-		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
-		     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
+		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0, m_dStep, 
+		     d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC,
 		     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 		}
 	      cudaThreadSynchronize();
@@ -1237,16 +1252,16 @@ void Spherocyl_Box::resize_step_2p(long unsigned int tTime, double dEpsilon, boo
 	    case HARMONIC:
 	      heun_corr_2p <HARMONIC> <<<m_nGridSize, m_nBlockSize>>>
 		(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
-		 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
-		 d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, d_pdTempPhi, d_pdXMoved,
-		 d_pdYMoved, m_dEpsilon, d_bNewNbrs);
+		 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, 
+		 d_pdMOI, d_pdIsoC, d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, 
+		 d_pdTempPhi, d_pdXMoved, d_pdYMoved, m_dEpsilon, d_bNewNbrs);
 	      break;
 	    case HERTZIAN:
 	      heun_corr_2p <HERTZIAN> <<<m_nGridSize, m_nBlockSize>>>
 		(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
-		 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
-		 d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, d_pdTempPhi, d_pdXMoved,
-		 d_pdYMoved, m_dEpsilon, d_bNewNbrs);
+		 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd,d_pdArea, 
+		 d_pdMOI, d_pdIsoC, d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, 
+		 d_pdTempPhi, d_pdXMoved, d_pdYMoved, m_dEpsilon, d_bNewNbrs);
 	    }
 
 	  if (bSvStress)
@@ -1289,15 +1304,15 @@ void Spherocyl_Box::y_resize_step_2p(long unsigned int tTime, double dEpsilon, b
 	{
 	case HARMONIC:
 	  euler_est_2p <HARMONIC, 1> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
-	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
-	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, d_pdFx,
-	     d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
+	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0, m_dStep, 
+	     d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC, 
+	     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 	  break;
 	case HERTZIAN:
 	  euler_est_2p <HERTZIAN, 1> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
-	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
-	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, d_pdFx,
-	     d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
+	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0, m_dStep, 
+	     d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC, 
+	     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 	}
       cudaThreadSynchronize();
       checkCudaError("Estimating new particle positions, calculating stresses");
@@ -1317,14 +1332,14 @@ void Spherocyl_Box::y_resize_step_2p(long unsigned int tTime, double dEpsilon, b
 	{
 	case HARMONIC:
 	  euler_est_2p <HARMONIC, 0> <<<m_nGridSize, m_nBlockSize>>>
-	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
-	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
+	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0, m_dStep, 
+	     d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC,
 	     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 	  break;
 	case HERTZIAN:
 	  euler_est_2p <HERTZIAN, 0> <<<m_nGridSize, m_nBlockSize>>>
-	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
-	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
+	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0, m_dStep, 
+	     d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC,
 	     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 	}
       cudaThreadSynchronize();
@@ -1336,16 +1351,16 @@ void Spherocyl_Box::y_resize_step_2p(long unsigned int tTime, double dEpsilon, b
     case HARMONIC:
       heun_corr_2p <HARMONIC> <<<m_nGridSize, m_nBlockSize>>>
 	(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
-	 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
-	 d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, d_pdTempPhi, d_pdXMoved,
-	 d_pdYMoved, m_dEpsilon, d_bNewNbrs);
+	 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, 
+	 d_pdMOI, d_pdIsoC, d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, 
+	 d_pdTempPhi, d_pdXMoved, d_pdYMoved, m_dEpsilon, d_bNewNbrs);
       break;
     case HERTZIAN:
       heun_corr_2p <HERTZIAN> <<<m_nGridSize, m_nBlockSize>>>
 	(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
-	 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
-	 d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, d_pdTempPhi, d_pdXMoved,
-	 d_pdYMoved, m_dEpsilon, d_bNewNbrs);
+	 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, 
+	 d_pdMOI, d_pdIsoC, d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, 
+	 d_pdTempPhi, d_pdXMoved, d_pdYMoved, m_dEpsilon, d_bNewNbrs);
     }
   
   if (bSvStress)
@@ -1500,15 +1515,15 @@ void Spherocyl_Box::relax_step_2p(long unsigned int tTime, bool bSvStress, bool 
 		{
 		case HARMONIC:
 		  euler_est_2p <HARMONIC, 1> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
-		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
-		     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, d_pdFx,
-		     d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
+		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0, m_dStep, 
+		     d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC, 
+		     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 		  break;
 		case HERTZIAN:
 		  euler_est_2p <HERTZIAN, 1> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
-		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
-		     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, d_pdFx,
-		     d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
+		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0, m_dStep, 
+		     d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC, 
+		     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 		}
 	      cudaThreadSynchronize();
 	      checkCudaError("Estimating new particle positions, calculating stresses");
@@ -1528,14 +1543,14 @@ void Spherocyl_Box::relax_step_2p(long unsigned int tTime, bool bSvStress, bool 
 		{
 		case HARMONIC:
 		  euler_est_2p <HARMONIC, 0> <<<m_nGridSize, m_nBlockSize>>>
-		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
-		     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
+		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0, m_dStep, 
+		     d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC,
 		     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 		  break;
 		case HERTZIAN:
 		  euler_est_2p <HERTZIAN, 0> <<<m_nGridSize, m_nBlockSize>>>
-		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
-		     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
+		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0, m_dStep, 
+		     d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC,
 		     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 		}
 	      cudaThreadSynchronize();
@@ -1547,16 +1562,16 @@ void Spherocyl_Box::relax_step_2p(long unsigned int tTime, bool bSvStress, bool 
 	    case HARMONIC:
 	      heun_corr_2p <HARMONIC> <<<m_nGridSize, m_nBlockSize>>>
 		(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
-		 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
-		 d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, d_pdTempPhi, d_pdXMoved,
-		 d_pdYMoved, m_dEpsilon, d_bNewNbrs);
+		 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, 
+		 d_pdMOI, d_pdIsoC, d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, 
+		 d_pdTempPhi, d_pdXMoved, d_pdYMoved, m_dEpsilon, d_bNewNbrs);
 	      break;
 	    case HERTZIAN:
 	      heun_corr_2p <HERTZIAN> <<<m_nGridSize, m_nBlockSize>>>
 		(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
-		 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
-		 d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, d_pdTempPhi, d_pdXMoved,
-		 d_pdYMoved, m_dEpsilon, d_bNewNbrs);
+		 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, 
+		 d_pdMOI, d_pdIsoC, d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, 
+		 d_pdTempPhi, d_pdXMoved, d_pdYMoved, m_dEpsilon, d_bNewNbrs);
 	    }
 
 	  if (bSvStress)
@@ -1646,10 +1661,10 @@ void Spherocyl_Box::relax_box_2p(long unsigned int nSteps, double dMaxStep, doub
 //
 ///////////////////////////////////////////////////
 template<Potential ePot, int bCalcStress>
-__global__ void pure_euler_est_2p(int nSpherocyls, int *pnNPP, int *pnNbrList, double dLx, double dLy,
-				  double dGamma, double dStrain, double dStep, double *pdX, double *pdY, double *pdPhi,
-				  double *pdR, double *pdA, double *pdMOI, double *pdIsoC, double *pdFx, double *pdFy,
-				  double *pdFt, float *pfSE, double *pdTempX, double *pdTempY, double *pdTempPhi)
+__global__ void pure_euler_est_2p(int nSpherocyls, int *pnNPP, int *pnNbrList, double dLx, double dLy, double dGamma, 
+				  double dStrain, double dStep, double *pdX, double *pdY, double *pdPhi, double *pdR, 
+				  double *pdA, double dKd, double *pdArea, double *pdMOI, double *pdIsoC, double *pdFx, 
+				  double *pdFy, double *pdFt, float *pfSE, double *pdTempX, double *pdTempY, double *pdTempPhi)
 { 
   int thid = threadIdx.x;
   int nPID = thid + blockIdx.x * blockDim.x;
@@ -1865,11 +1880,15 @@ __global__ void pure_euler_est_2p(int nSpherocyls, int *pnNPP, int *pnNbrList, d
       pdFx[nPID] = dFx;
       pdFy[nPID] = dFy;
       pdFt[nPID] = dFt;
-      
+      double dArea = pdArea[nPID];
+      dFx /= (dKd*dArea);
+      dFy /= (dKd*dArea);
+      dFt /= (dKd*dArea*pdMOI[nPID]);
+
       pdTempX[nPID] = dX + dStep * (dFx + 0.5 * dStrain * dX);
       pdTempY[nPID] = dY + dStep * (dFy - 0.5 * dStrain * dY);
       double dRIso = -0.5 * pdIsoC[nPID] * sin(2*dPhi);
-      pdTempPhi[nPID] = dPhi + dStep * (dFt / pdMOI[nPID] + dStrain * dRIso);
+      pdTempPhi[nPID] = dPhi + dStep * (dFt + dStrain * dRIso);
       
       nPID += nThreads;
     }
@@ -1930,11 +1949,11 @@ __global__ void pure_euler_est_2p(int nSpherocyls, int *pnNPP, int *pnNbrList, d
 //
 /////////////////////////////////////////////////////////////////
 template<Potential ePot>
-__global__ void pure_heun_corr_2p(int nSpherocyls, int *pnNPP, int *pnNbrList, double dLx, double dLy,
-			     double dGamma, double dStrain, double dStep, double *pdX, double *pdY,
-			     double *pdPhi, double *pdR, double *pdA, double *pdMOI, double *pdIsoC,
-			     double *pdFx, double *pdFy, double *pdFt, double *pdTempX, double *pdTempY,
-			     double *pdTempPhi, double *pdXMoved, double *pdYMoved, double dEpsilon, int *bNewNbrs)
+__global__ void pure_heun_corr_2p(int nSpherocyls, int *pnNPP, int *pnNbrList, double dLx, double dLy, double dGamma, 
+				  double dStrain, double dStep, double *pdX, double *pdY, double *pdPhi, double *pdR, 
+				  double *pdA, double dKd, double *pdArea, double *pdMOI, double *pdIsoC, double *pdFx, 
+				  double *pdFy, double *pdFt, double *pdTempX, double *pdTempY, double *pdTempPhi, 
+				  double *pdXMoved, double *pdYMoved, double dEpsilon, int *bNewNbrs)
 { 
   int thid = threadIdx.x;
   int nPID = thid + blockIdx.x * blockDim.x;
@@ -2119,15 +2138,16 @@ __global__ void pure_heun_corr_2p(int nSpherocyls, int *pnNPP, int *pnNbrList, d
 	  
 	}
       double dMOI = pdMOI[nPID];
-      //double dIsoC = pdIsoC[nPID];
-      //dFx -= dNewGamma * dFy;
-      dFt = dFt / dMOI; // - dStrain * 0.5 * dIsoC*sin(2*dPhi);
+      double dArea = pdArea[nPID];
+      dFx /= (dKd*dArea);
+      dFy /= (dKd*dArea);
+      dFt = dFt / (dKd*dArea*dMOI); // - dStrain * 0.5 * dIsoC*sin(2*dPhi);
 
-      double dFy0 = pdFy[nPID];
-      double dFx0 = pdFx[nPID];
+      double dFy0 = pdFy[nPID] / (dKd*dArea);
+      double dFx0 = pdFx[nPID] / (dKd*dArea);
       //double dPhi0 = pdPhi[nPID];
       
-      double dFt0 = pdFt[nPID] / dMOI; // - dStrain * 0.5 * dIsoC*sin(2*dPhi0);
+      double dFt0 = pdFt[nPID] / (dKd*dArea*dMOI); // - dStrain * 0.5 * dIsoC*sin(2*dPhi0);
 
       double dDx = 0.5 * dStep * (dFx - dFx0);
       //double dDsx = 0.5 * dStep * dStrain * (dX + pdX[nPID]);
@@ -2168,14 +2188,14 @@ void Spherocyl_Box::pure_strain_step_2p(long unsigned int tTime, bool bSvStress,
 	case HARMONIC:
 	  pure_euler_est_2p <HARMONIC, 1> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
 	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, m_dStrainRate,
-	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, d_pdFx, 
-	     d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
+	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC, 
+	     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 	  break;
 	case HERTZIAN:
 	  pure_euler_est_2p <HERTZIAN, 1> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
 	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, m_dStrainRate,
-	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, d_pdFx, 
-	     d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
+	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC, 
+	     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 	}
       cudaThreadSynchronize();
       checkCudaError("Estimating new particle positions, calculating stresses");
@@ -2196,13 +2216,13 @@ void Spherocyl_Box::pure_strain_step_2p(long unsigned int tTime, bool bSvStress,
 	case HARMONIC:
 	  pure_euler_est_2p <HARMONIC, 0> <<<m_nGridSize, m_nBlockSize>>>
 	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, m_dStrainRate,
-	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, 
+	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC, 
 	     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 	  break;
 	case HERTZIAN:
 	  pure_euler_est_2p <HERTZIAN, 0> <<<m_nGridSize, m_nBlockSize>>>
 	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, m_dStrainRate,
-	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, 
+	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC, 
 	     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 	}
       cudaThreadSynchronize();
@@ -2214,13 +2234,13 @@ void Spherocyl_Box::pure_strain_step_2p(long unsigned int tTime, bool bSvStress,
     case HARMONIC:
       pure_heun_corr_2p <HARMONIC> <<<m_nGridSize, m_nBlockSize>>>
 	(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx*(1+0.5*m_dStep*m_dStrainRate), m_dLy*(1-0.5*m_dStep*m_dStrainRate), 
-	 m_dGamma, m_dStrainRate, m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, 
+	 m_dGamma, m_dStrainRate, m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC, 
 	 d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, d_pdTempPhi, d_pdXMoved, d_pdYMoved, m_dEpsilon, d_bNewNbrs);
       break;
     case HERTZIAN:
       pure_heun_corr_2p <HERTZIAN> <<<m_nGridSize, m_nBlockSize>>>
 	(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx*(1+0.5*m_dStep*m_dStrainRate), m_dLy*(1-0.5*m_dStep*m_dStrainRate),
-	 m_dGamma, m_dStrainRate, m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, 
+	 m_dGamma, m_dStrainRate, m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, m_dKd, d_pdArea, d_pdMOI, d_pdIsoC, 
 	 d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, d_pdTempPhi, d_pdXMoved, d_pdYMoved, m_dEpsilon, d_bNewNbrs);
     }
 

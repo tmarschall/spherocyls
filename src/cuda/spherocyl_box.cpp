@@ -359,6 +359,7 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double dAspect, double 
   }
   m_dAMax = m_dRMax*dAspect;
   m_nDeviceMem = 0;
+  m_dKd = dBidispersity/(D_PI*m_dRMax*m_dRMax + 4*m_dRMax*m_dAMax);  // Default dissipative constant: 1/A_s
 
   // This allocates the coordinate data as page-locked memory, which
   //  transfers faster, since they are likely to be transferred often
@@ -450,6 +451,7 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dLx, double dLy, double dAs
     m_dRMax = 0.5;
   }
   m_dAMax = m_dRMax*dAspect;
+  m_dKd = dBidispersity/(D_PI*m_dRMax*m_dRMax + 4*m_dRMax*m_dAMax);  // Default dissipative constant: 1/A_s
   m_nDeviceMem = 0;
 
   // This allocates the coordinate data as page-locked memory, which
@@ -550,6 +552,8 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dLx, double dLy, double *pd
   m_dASig = 0;
   m_dRMax = 0.0;
   m_dAMax = 0.0;
+  double dRMin = pdR[0];
+  double dAMin = pdA[0];
   //cout << "Loading positions" << endl;
   for (int p = 0; p < nSpherocyls; p++)
     {
@@ -562,8 +566,12 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dLx, double dLy, double *pd
       h_pnMemID[p] = p;
       if (pdR[p] > m_dRMax)
 	m_dRMax = pdR[p];
+      else if (pdR[p] < dRMin)
+	dRMin = pdR[p];
       if (pdA[p] > m_dAMax)
 	m_dAMax = pdA[p];
+      else if (pdA[p] > dAMin)
+	dAMin = pdA[p];
       while (h_pdX[p] > dLx)
 	h_pdX[p] -= dLx;
       while (h_pdX[p] < 0)
@@ -573,6 +581,7 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dLx, double dLy, double *pd
       while (h_pdY[p] < 0)
 	h_pdY[p] += dLy;
     }
+  m_dKd = 1/(D_PI*dRMin*dRMin+4*dRMin*dAMin);
   m_dPacking = calculate_packing();
   //cout << "Positions loaded" << endl;
 
@@ -652,6 +661,8 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double *pdX,
   m_dASig = 0;
   m_dRMax = 0.0;
   m_dAMax = 0.0;
+  double dRMin = pdR[0];
+  double dAMin = pdA[0];
   //cout << "Loading positions" << endl;
   for (int p = 0; p < nSpherocyls; p++)
     {
@@ -664,8 +675,12 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double *pdX,
       h_pnMemID[p] = p;
       if (pdR[p] > m_dRMax)
 	m_dRMax = pdR[p];
+      else if (pdR[p] < dRMin)
+	dRMin = pdR[p];
       if (pdA[p] > m_dAMax)
 	m_dAMax = pdA[p];
+      else if (pdA[p] > dAMin)
+	dAMin = pdA[p];
       while (h_pdX[p] > dL)
 	h_pdX[p] -= dL;
       while (h_pdX[p] < 0)
@@ -675,6 +690,7 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double *pdX,
       while (h_pdY[p] < 0)
 	h_pdY[p] += dL;
     }
+  m_dKd = 1/(D_PI*dRMin*dRMin+4*dRMin*dAMin);
   m_dPacking = calculate_packing();
   // cout << "Positions loaded, particle 0: " << h_pdX[0] << ", " << h_pdY[0] << ", " << h_pdPhi[0] << endl;
 

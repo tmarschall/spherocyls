@@ -31,7 +31,7 @@ __global__ void find_moi(int nSpherocyls, double *pdMOI, double *pdA)
   }
 }
 
-__global__ void find_rot_consts(int nSpherocyls, double *pdMOI, double *pdIsoCoeff, double *pdR, double *pdA)
+__global__ void find_rot_consts(int nSpherocyls, double *pdArea, double *pdMOI, double *pdIsoCoeff, double *pdR, double *pdA)
 {
   int thid = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -41,8 +41,9 @@ __global__ void find_rot_consts(int nSpherocyls, double *pdMOI, double *pdIsoCoe
     double dAlpha = dA/dR;
     
     double dC = 3*D_PI + 24*dAlpha + 6*D_PI*dAlpha*dAlpha + 8*dAlpha*dAlpha*dAlpha;
-    double dB = D_PI*dR*dR + 4*dR*dA;
-    pdMOI[thid] = dR*dR*dR*dR*dC/(6*dB);
+    double dArea = D_PI*dR*dR + 4*dR*dA;
+    pdArea[thid] = dArea;
+    pdMOI[thid] = dR*dR*dR*dR*dC/(6*dArea);
     pdIsoCoeff[thid] = (8*dAlpha + 6*D_PI*dAlpha*dAlpha + 8*dAlpha*dAlpha*dAlpha)/dC;
 
     thid += blockDim.x*gridDim.x;
@@ -239,7 +240,7 @@ void Spherocyl_Box::find_neighbors()
   cudaMemset((void *) d_bNewNbrs, 0, sizeof(int));
 
   if (!m_bMOI)
-    find_rot_consts <<<m_nGridSize, m_nBlockSize>>> (m_nSpherocyls, d_pdMOI, d_pdIsoC, d_pdR, d_pdA);
+    find_rot_consts <<<m_nGridSize, m_nBlockSize>>> (m_nSpherocyls, d_pdArea, d_pdMOI, d_pdIsoC, d_pdR, d_pdA);
 
   find_cells <<<m_nGridSize, m_nBlockSize>>>
     (m_nSpherocyls, m_nMaxPPC, m_dCellW, m_dCellH, m_nCellCols, 
