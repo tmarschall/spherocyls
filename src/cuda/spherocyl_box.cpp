@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
+#include <random>
 
 using namespace std;
 
@@ -22,11 +23,11 @@ const double D_PI = 3.14159265358979;
 
 void Spherocyl_Box::reconfigure_cells()
 {
-  double dWMin = 2.24 * (m_dRMax + m_dAMax) + m_dEpsilon;
+  double dWMin = sqrt(m_dLx*m_dLx/(m_dLy*m_dLy) + 4) * (m_dRMax + m_dAMax) + m_dEpsilon;
   double dHMin = 2 * (m_dRMax + m_dAMax) + m_dEpsilon;
 
-  int nNewCellRows = max(static_cast<int>(m_dLy / dHMin), 1);
-  int nNewCellCols = max(static_cast<int>(m_dLx / dWMin), 1);
+  int nNewCellRows = max(static_cast<int>(m_dLy / dHMin), 3);
+  int nNewCellCols = max(static_cast<int>(m_dLx / dWMin), 3);
   if (nNewCellRows != m_nCellRows || nNewCellCols != m_nCellCols) {
     delete[] h_pnPPC; delete[] h_pnCellList; delete[] h_pnAdjCells;
     cudaFree(d_pnPPC); cudaFree(d_pnCellList); cudaFree(d_pnAdjCells);
@@ -35,6 +36,29 @@ void Spherocyl_Box::reconfigure_cells()
 #endif
     *h_bNewNbrs = 1;
     configure_cells();
+  }
+  else {
+    m_dCellW = m_dLx / m_nCellCols;
+    m_dCellH = m_dLy / m_nCellRows;
+  }
+}
+
+void Spherocyl_Box::reconfigure_cells(double dMaxGamma)
+{
+  double dWMin = 2 * sqrt(dMaxGamma*dMaxGamma + 1) * (m_dRMax + m_dAMax) + m_dEpsilon;
+  double dHMin = 2 * (m_dRMax + m_dAMax) + m_dEpsilon;
+
+  int nNewCellRows = max(static_cast<int>(m_dLy / dHMin), 3);
+  int nNewCellCols = max(static_cast<int>(m_dLx / dWMin), 3);
+  if (nNewCellRows != m_nCellRows || nNewCellCols != m_nCellCols) {
+    cout << "Reconfiguring cells" << endl;
+    delete[] h_pnPPC; delete[] h_pnCellList; delete[] h_pnAdjCells;
+    cudaFree(d_pnPPC); cudaFree(d_pnCellList); cudaFree(d_pnAdjCells);
+#if GOLD_FUNCS == 1
+    delete[] g_pnPPC; delete[] g_pnCellList; delete[] g_pnAdjCells;
+#endif
+    *h_bNewNbrs = 1;
+    configure_cells(dMaxGamma);
   }
   else {
     m_dCellW = m_dLx / m_nCellCols;
@@ -53,7 +77,67 @@ void Spherocyl_Box::configure_cells()
   // Minimum height & width of cells
   //  Width is set so that it is only possible for particles in 
   //  adjacent cells to interact as long as |gamma| < 0.5
-  double dWMin = 2.24 * (m_dRMax + m_dAMax) + m_dEpsilon;
+  double dWMin = sqrt(m_dLx*m_dLx/(m_dLy*m_dLy) + 4) * (m_dRMax + m_dAMax) + m_dEpsilon;
+  double dHMin = 2 * (m_dRMax + m_dAMax) + m_dEpsilon;
+
+  m_nCellRows = max(static_cast<int>(m_dLy / dHMin), 3);
+  m_nCellCols = max(static_cast<int>(m_dLx / dWMin), 3);
+  m_nCells = m_nCellRows * m_nCellCols;
+  cout << "Cells: " << m_nCells << ": " << m_nCellRows << " x " << m_nCellCols << endl;
+
+  m_dCellW = m_dLx / m_nCellCols;
+  m_dCellH = m_dLy / m_nCellRows;
+  cout << "Cell dimensions: " << m_dCellW << " x " << m_dCellH << endl;
+
+  h_pnPPC = new int[m_nCells];
+  h_pnCellList = new int[m_nCells * m_nMaxPPC];
+  h_pnAdjCells = new int[8 * m_nCells];
+  cudaMalloc((void **) &d_pnPPC, m_nCells * sizeof(int));
+  cudaMalloc((void **) &d_pnCellList, m_nCells*m_nMaxPPC*sizeof(int));
+  cudaMalloc((void **) &d_pnAdjCells, 8*m_nCells*sizeof(int));
+  m_nDeviceMem += m_nCells*(9+m_nMaxPPC)*sizeof(int);
+#if GOLD_FUNCS == 1
+  g_pnPPC = new int[m_nCells];
+  g_pnCellList = new int[m_nCells * m_nMaxPPC];
+  g_pnAdjCells = new int[8 * m_nCells];
+#endif
+  
+  // Make a list of which cells are next to each cell
+  // This is done once for convinience since the boundary conditions
+  //  make this more than trivial
+  for (int c = 0; c < m_nCells; c++)
+    {
+      int nRow = c / m_nCellCols; 
+      int nCol = c % m_nCellCols;
+
+      int nAdjCol1 = (nCol + 1) % m_nCellCols;
+      int nAdjCol2 = (m_nCellCols + nCol - 1) % m_nCellCols;
+      h_pnAdjCells[8 * c] = nRow * m_nCellCols + nAdjCol1;
+      h_pnAdjCells[8 * c + 1] = nRow * m_nCellCols + nAdjCol2;
+
+      int nAdjRow = (nRow + 1) % m_nCellRows;
+      h_pnAdjCells[8 * c + 2] = nAdjRow * m_nCellCols + nCol;
+      h_pnAdjCells[8 * c + 3] = nAdjRow * m_nCellCols + nAdjCol1;
+      h_pnAdjCells[8 * c + 4] = nAdjRow * m_nCellCols + nAdjCol2;
+      
+      nAdjRow = (m_nCellRows + nRow - 1) % m_nCellRows;
+      h_pnAdjCells[8 * c + 5] = nAdjRow * m_nCellCols + nCol;
+      h_pnAdjCells[8 * c + 6] = nAdjRow * m_nCellCols + nAdjCol1;
+      h_pnAdjCells[8 * c + 7] = nAdjRow * m_nCellCols + nAdjCol2;
+    }
+  cudaMemcpy(d_pnAdjCells, h_pnAdjCells, 8*m_nCells*sizeof(int), cudaMemcpyHostToDevice);
+  checkCudaError("Configuring cells");
+}
+
+void Spherocyl_Box::configure_cells(double dMaxGamma)
+{
+  assert(m_dRMax > 0.0);
+  assert(m_dAMax >= 0.0);
+
+  // Minimum height & width of cells
+  //  Width is set so that it is only possible for particles in 
+  //  adjacent cells to interact as long as |gamma| < 0.5
+  double dWMin = 2 * sqrt(dMaxGamma*dMaxGamma + 1) * (m_dRMax + m_dAMax) + m_dEpsilon;
   double dHMin = 2 * (m_dRMax + m_dAMax) + m_dEpsilon;
 
   m_nCellRows = max(static_cast<int>(m_dLy / dHMin), 1);
@@ -171,10 +255,13 @@ void Spherocyl_Box::construct_defaults()
   cudaMalloc((void**) &d_pdTempPhi, sizeof(double)*m_nSpherocyls);
   cudaMalloc((void**) &d_pdXMoved, sizeof(double)*m_nSpherocyls);
   cudaMalloc((void**) &d_pdYMoved, sizeof(double)*m_nSpherocyls);
+  cudaMalloc((void**) &d_pdDx, sizeof(double)*m_nSpherocyls);
+  cudaMalloc((void**) &d_pdDy, sizeof(double)*m_nSpherocyls);
+  cudaMalloc((void**) &d_pdDt, sizeof(double)*m_nSpherocyls);
   cudaMalloc((void**) &d_pdMOI, sizeof(double)*m_nSpherocyls);
   cudaMalloc((void**) &d_pdIsoC, sizeof(double)*m_nSpherocyls);
   m_bMOI = 0;
-  m_nDeviceMem += 6*m_nSpherocyls*sizeof(double);
+  m_nDeviceMem += 10*m_nSpherocyls*sizeof(double);
 #if GOLD_FUNCS == 1
   *g_bNewNbrs = 1;
   g_pdTempX = new double[3*m_nSpherocyls];
@@ -185,7 +272,8 @@ void Spherocyl_Box::construct_defaults()
 #endif
   
   // Stress, energy, & force data
-  cudaHostAlloc((void **)&h_pfSE, 5*sizeof(float), 0);
+  h_pdLineEnergy = new double[6];
+  cudaHostAlloc((void **) &h_pfSE, 5*sizeof(float), 0);
   m_pfEnergy = h_pfSE+4;
   m_pfPxx = h_pfSE;
   m_pfPyy = h_pfSE+1;
@@ -195,12 +283,17 @@ void Spherocyl_Box::construct_defaults()
   h_pdFx = new double[m_nSpherocyls];
   h_pdFy = new double[m_nSpherocyls];
   h_pdFt = new double[m_nSpherocyls];
+  h_pdEnergies = new double[m_nSpherocyls];
   // GPU
   cudaMalloc((void**) &d_pfSE, 5*sizeof(float));
+  cudaMalloc((void**) &d_pdEnergies, m_nSpherocyls*sizeof(double));
   cudaMalloc((void**) &d_pdFx, m_nSpherocyls*sizeof(double));
   cudaMalloc((void**) &d_pdFy, m_nSpherocyls*sizeof(double));
   cudaMalloc((void**) &d_pdFt, m_nSpherocyls*sizeof(double));
-  m_nDeviceMem += 5*sizeof(float) + 3*m_nSpherocyls*sizeof(double);
+  cudaMalloc((void**) &d_pdTempFx, m_nSpherocyls*sizeof(double));
+  cudaMalloc((void**) &d_pdTempFy, m_nSpherocyls*sizeof(double));
+  cudaMalloc((void**) &d_pdTempFt, m_nSpherocyls*sizeof(double));
+  m_nDeviceMem += 5*sizeof(float) + 6*m_nSpherocyls*sizeof(double);
  #if GOLD_FUNCS == 1
   g_pfSE = new float[5];
   g_pdFx = new double[m_nSpherocyls];
@@ -228,6 +321,9 @@ void Spherocyl_Box::construct_defaults()
 #endif
 
   set_kernel_configs();	
+  cudaHostAlloc((void **) &h_pdBlockSums, m_nGridSize*sizeof(double), 0);
+  cudaMalloc((void **) &d_pdBlockSums, m_nGridSize*sizeof(double));
+  m_nDeviceMem += m_nGridSize*sizeof(double);
 }
 
 double Spherocyl_Box::calculate_packing()
@@ -242,7 +338,7 @@ double Spherocyl_Box::calculate_packing()
 
 // Creates the class
 // See spherocyl_box.h for default values of parameters
-Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double dAspect, double dBidispersity, Config config, double dEpsilon, int nMaxPPC, int nMaxNbrs, Potential ePotential)
+Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double dAspect, double dBidispersity, Config config, double dEpsilon, double dASig, int nMaxPPC, int nMaxNbrs, Potential ePotential)
 {
   assert(nSpherocyls > 0);
   m_nSpherocyls = nSpherocyls;
@@ -254,6 +350,7 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double dAspect, double 
   m_dEpsilon = dEpsilon;
   m_nMaxPPC = nMaxPPC;
   m_nMaxNbrs = nMaxNbrs;
+  m_dASig = dASig;
   if (dBidispersity >= 1) {
     m_dRMax = 0.5*dBidispersity;
   }
@@ -292,6 +389,9 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double dAspect, double 
   g_pnMemID = new int[nSpherocyls];
 #endif
 
+
+  set_shapes(0, dBidispersity);
+
   construct_defaults();
   cout << "Memory allocated on device (MB): " << (double)m_nDeviceMem / (1024.*1024.) << endl;
   /*
@@ -316,14 +416,21 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double dAspect, double 
     break;
   }
   */
-  place_spherocyls(config,0,dBidispersity);
+
+  cudaMemcpy(d_pdR, h_pdR, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);
+  cudaMemcpyAsync(d_pdA, h_pdA, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);
+  cudaMemcpyAsync(d_pnInitID, h_pnMemID, sizeof(int)*m_nSpherocyls, cudaMemcpyHostToDevice);
+  cudaMemcpyAsync(d_pnMemID, h_pnMemID, sizeof(int)*m_nSpherocyls, cudaMemcpyHostToDevice);
+  cudaThreadSynchronize();
+
+  place_spherocyls(config,1,dBidispersity);
     
   m_dPacking = calculate_packing();
   cout << "Random spherocyls placed" << endl;
   //display(0,0,0,0);
   
 }
-Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dLx, double dLy, double dAspect, double dBidispersity, Config config, double dEpsilon, int nMaxPPC, int nMaxNbrs, Potential ePotential)
+Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dLx, double dLy, double dAspect, double dBidispersity, Config config, double dEpsilon, double dASig, int nMaxPPC, int nMaxNbrs, Potential ePotential)
 {
   assert(nSpherocyls > 0);
   m_nSpherocyls = nSpherocyls;
@@ -335,6 +442,7 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dLx, double dLy, double dAs
   m_dEpsilon = dEpsilon;
   m_nMaxPPC = nMaxPPC;
   m_nMaxNbrs = nMaxNbrs;
+  m_dASig = dASig;
   if (dBidispersity >= 1) {
     m_dRMax = 0.5*dBidispersity;
   }
@@ -373,6 +481,10 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dLx, double dLy, double dAs
   g_pnMemID = new int[nSpherocyls];
 #endif
 
+  cout << "Setting shapes" << endl;
+  set_shapes(0, dBidispersity);
+
+  cout << "Constructing cells etc." << endl;
   construct_defaults();
   cout << "Memory allocated on device (MB): " << (double)m_nDeviceMem / (1024.*1024.) << endl;
   /*
@@ -397,7 +509,14 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dLx, double dLy, double dAs
     break;
   }
   */
-  place_spherocyls(config,0,dBidispersity);
+  
+  cudaMemcpy(d_pdR, h_pdR, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);
+  cudaMemcpyAsync(d_pdA, h_pdA, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);
+  cudaMemcpyAsync(d_pnInitID, h_pnMemID, sizeof(int)*m_nSpherocyls, cudaMemcpyHostToDevice);
+  cudaMemcpyAsync(d_pnMemID, h_pnMemID, sizeof(int)*m_nSpherocyls, cudaMemcpyHostToDevice);
+  cudaThreadSynchronize();
+
+  place_spherocyls(config,1,dBidispersity);
 
   m_dPacking = calculate_packing();
   cout << "Random spherocyls placed" << endl;
@@ -428,6 +547,7 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dLx, double dLy, double *pd
   cudaHostAlloc((void**)&h_pdR, nSpherocyls*sizeof(double), 0);
   cudaHostAlloc((void**)&h_pdA, nSpherocyls*sizeof(double), 0);
   cudaHostAlloc((void**)&h_pnMemID, nSpherocyls*sizeof(int), 0);
+  m_dASig = 0;
   m_dRMax = 0.0;
   m_dAMax = 0.0;
   //cout << "Loading positions" << endl;
@@ -529,6 +649,7 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double *pdX,
   cudaHostAlloc((void**)&h_pdR, nSpherocyls*sizeof(double), 0);
   cudaHostAlloc((void**)&h_pdA, nSpherocyls*sizeof(double), 0);
   cudaHostAlloc((void**)&h_pnMemID, nSpherocyls*sizeof(int), 0);
+  m_dASig = 0;
   m_dRMax = 0.0;
   m_dAMax = 0.0;
   //cout << "Loading positions" << endl;
@@ -555,7 +676,7 @@ Spherocyl_Box::Spherocyl_Box(int nSpherocyls, double dL, double *pdX,
 	h_pdY[p] += dL;
     }
   m_dPacking = calculate_packing();
-  //cout << "Positions loaded" << endl;
+  // cout << "Positions loaded, particle 0: " << h_pdX[0] << ", " << h_pdY[0] << ", " << h_pdPhi[0] << endl;
 
   // This initializes the arrays on the GPU
   cudaMalloc((void**) &d_pdX, sizeof(double)*nSpherocyls);
@@ -619,15 +740,18 @@ Spherocyl_Box::~Spherocyl_Box()
   cudaFreeHost(h_pnMemID);
   cudaFreeHost(h_bNewNbrs);
   cudaFreeHost(h_pfSE);
+  cudaFreeHost(h_pdBlockSums);
   delete[] h_pdFx;
   delete[] h_pdFy;
   delete[] h_pdFt;
+  delete[] h_pdEnergies;
   delete[] h_pnCellID;
   delete[] h_pnPPC;
   delete[] h_pnCellList;
   delete[] h_pnAdjCells;
   delete[] h_pnNPP;
   delete[] h_pnNbrList;
+  delete[] h_pdLineEnergy;
   
   // Device arrays
   cudaFree(d_pdX);
@@ -646,9 +770,17 @@ Spherocyl_Box::~Spherocyl_Box()
   cudaFree(d_pdYMoved);
   cudaFree(d_bNewNbrs);
   cudaFree(d_pfSE);
+  cudaFree(d_pdBlockSums);
+  cudaFree(d_pdEnergies);
   cudaFree(d_pdFx);
   cudaFree(d_pdFy);
   cudaFree(d_pdFt);
+  cudaFree(d_pdTempFx);
+  cudaFree(d_pdTempFy);
+  cudaFree(d_pdTempFt);
+  cudaFree(d_pdDx);
+  cudaFree(d_pdDy);
+  cudaFree(d_pdDt);
   cudaFree(d_pnCellID);
   cudaFree(d_pnPPC);
   cudaFree(d_pnCellList);
@@ -685,6 +817,7 @@ Spherocyl_Box::~Spherocyl_Box()
 // Mostly used to make sure things are working right
 void Spherocyl_Box::display(bool bParticles, bool bCells, bool bNeighbors, bool bStress)
 {
+  cout.precision(9);
   if (bParticles)
     {
       cudaMemcpyAsync(h_pdX, d_pdX, sizeof(double)*m_nSpherocyls, cudaMemcpyDeviceToHost);
@@ -754,13 +887,16 @@ void Spherocyl_Box::display(bool bParticles, bool bCells, bool bNeighbors, bool 
       cudaMemcpy(h_pdFx, d_pdFx, m_nSpherocyls*sizeof(double), cudaMemcpyDeviceToHost);
       cudaMemcpy(h_pdFy, d_pdFy, m_nSpherocyls*sizeof(double), cudaMemcpyDeviceToHost);
       cudaMemcpy(h_pdFt, d_pdFt, m_nSpherocyls*sizeof(double), cudaMemcpyDeviceToHost);
+      cudaMemcpy(h_pdEnergies, d_pdEnergies, m_nSpherocyls*sizeof(double), cudaMemcpyDeviceToHost);
       cudaThreadSynchronize();
       m_fP = 0.5 * (*m_pfPxx + *m_pfPyy);
       cout << endl;
+      double dEnergyTotal = 0.0;
       for (int p = 0; p < m_nSpherocyls; p++)
 	{
-	  cout << "Particle " << p << ":  (" << h_pdFx[p] << ", " 
-	       << h_pdFy[p] << ", " << h_pdFt[p] << ")\n";
+	  dEnergyTotal += h_pdEnergies[p];
+	  cout << "Particle " << p << ":  (" << h_pdFx[p] << ", " << h_pdFy[p] << ", " 
+	       << h_pdFt[p] << ")  " << h_pdEnergies[p] << " " << dEnergyTotal << "\n";
 	}
       cout << endl << "Energy: " << *m_pfEnergy << endl;
       cout << "Pxx: " << *m_pfPxx << endl;
@@ -888,18 +1024,39 @@ bool Spherocyl_Box::check_for_crosses(int nIndex, double dEpsilon)
   return 0;
 }
 
+#if SHEAR_INIT == 1
+double Spherocyl_Box::uniformToAngleDist(double dUniform, double dC)
+{
+  double dAngle;
+  if (dC == 0) {
+    dAngle = D_PI*dUniform-D_PI/2;
+  }
+  else {
+    dAngle = atan(sqrt(1-dC*dC)*tan(D_PI*(dUniform-0.5))/(1+dC));
+  }
+  return dAngle;
+}
+#else
+double Spherocyl_Box::uniformToAngleDist(double dUniform, double dC)
+{
+  double dAngle = D_PI*dUniform-D_PI/2;
+  return dAngle;
+}
+#endif
+
 void Spherocyl_Box::place_random_0e_spherocyls(int seed, bool bRandAngle, double dBidispersity)
 {
   srand(time(0) + seed);
 
   double dAspect = m_dAMax / m_dRMax;
+  double dC = dAspect*(8/dAspect + 6*D_PI + 8*dAspect)/(3*D_PI/dAspect + 24 + 6*D_PI*dAspect + 8*dAspect*dAspect);
   double dR = 0.5;
   double dA = dAspect * dR;
   double dRDiff = (dBidispersity-1) * dR;
   double dADiff = (dBidispersity-1) * dA;
   for (int p = 0; p < m_nSpherocyls; p++) {
-    h_pdR[p] = dR + (p%2)*dRDiff;
-    h_pdA[p] = dA + (p%2)*dADiff;
+    h_pdR[p] = dR + (1-(p%2))*dRDiff;
+    h_pdA[p] = dA + (1-(p%2))*dADiff;
     h_pnMemID[p] = p;
   }
   cudaMemcpy(d_pdR, h_pdR, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);
@@ -911,7 +1068,7 @@ void Spherocyl_Box::place_random_0e_spherocyls(int seed, bool bRandAngle, double
   h_pdX[0] = m_dLx * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
   h_pdY[0] = m_dLy * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
   if (bRandAngle)
-    h_pdPhi[0] = 2*D_PI * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
+    h_pdPhi[0] = uniformToAngleDist( static_cast<double>(rand())/static_cast<double>(RAND_MAX), dC);
   else
     h_pdPhi[0] = 0;
 
@@ -923,7 +1080,7 @@ void Spherocyl_Box::place_random_0e_spherocyls(int seed, bool bRandAngle, double
       h_pdX[p] = m_dLx * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
       h_pdY[p] = m_dLy * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
       if (bRandAngle)
-	h_pdPhi[p] = 2*D_PI * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
+	h_pdPhi[p] = uniformToAngleDist( static_cast<double>(rand()) / static_cast<double>(RAND_MAX), dC);
       else
 	h_pdPhi[p] = 0;
 	
@@ -946,13 +1103,14 @@ void Spherocyl_Box::place_random_spherocyls(int seed, bool bRandAngle, double dB
   srand(time(0) + seed);
 
   double dAspect = m_dAMax / m_dRMax;
+  double dC = dAspect*(8/dAspect + 6*D_PI + 8*dAspect)/(3*D_PI/dAspect + 24 + 6*D_PI*dAspect + 8*dAspect*dAspect);
   double dR = 0.5;
   double dA = dAspect * dR;
   double dRDiff = (dBidispersity-1) * dR;
   double dADiff = (dBidispersity-1) * dA;
   for (int p = 0; p < m_nSpherocyls; p++) {
-    h_pdR[p] = dR + (p%2)*dRDiff;
-    h_pdA[p] = dA + (p%2)*dADiff;
+    h_pdR[p] = dR + (1-(p%2))*dRDiff;
+    h_pdA[p] = dA + (1-(p%2))*dADiff;
     h_pnMemID[p] = p;
   }
   cudaMemcpy(d_pdR, h_pdR, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);
@@ -964,7 +1122,7 @@ void Spherocyl_Box::place_random_spherocyls(int seed, bool bRandAngle, double dB
   h_pdX[0] = m_dLx * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
   h_pdY[0] = m_dLy * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
   if (bRandAngle)
-    h_pdPhi[0] = 2*D_PI * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
+    h_pdPhi[0] = uniformToAngleDist( static_cast<double>(rand())/static_cast<double>(RAND_MAX), dC);
   else
     h_pdPhi[0] = 0;
 
@@ -976,7 +1134,7 @@ void Spherocyl_Box::place_random_spherocyls(int seed, bool bRandAngle, double dB
       h_pdX[p] = m_dLx * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
       h_pdY[p] = m_dLy * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
       if (bRandAngle)
-	h_pdPhi[p] = 2*D_PI * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
+	h_pdPhi[p] = uniformToAngleDist( static_cast<double>(rand()) / static_cast<double>(RAND_MAX), dC);
       else
 	h_pdPhi[p] = 0;
 	
@@ -998,6 +1156,8 @@ void Spherocyl_Box::place_random_spherocyls(int seed, bool bRandAngle, double dB
 void Spherocyl_Box::place_spherocyl_grid(int seed, bool bRandAngle) 
 {
   double dAspect = (m_dAMax + m_dRMax) / m_dRMax;
+  double dA = dAspect - 1.;
+  double dC = dA*(8 + 6*D_PI*dA + 8*dA*dA)/(3*D_PI + 24*dA + 6*D_PI*dA*dA + 8*dA*dA*dA);
   double dCols = sqrt(m_nSpherocyls/dAspect);
   int nRows = int(dAspect*dCols);
   int nCols = int(dCols);
@@ -1007,9 +1167,22 @@ void Spherocyl_Box::place_spherocyl_grid(int seed, bool bRandAngle)
     cerr << "Error: Spherocylinders will not fit into square grid, change the number or size of box" << endl;
     exit(1);
   }
-
-  srand(time(0) + seed);
   
+  srand(time(0) + seed);
+
+  /*
+  double *pdColOffsets = new double[nCols];
+  pdColOffsets[0] = 0;
+  for (int c = 1; c < nCols; c++) {
+    pdColOffsets[c] = m_dRMax*(1. - 2*static_cast<double>(rand())/static_cast<double>(RAND_MAX)); 
+  }
+  */
+  double *pdRowOffsets = new double[nRows];
+  pdRowOffsets[0] = 0;
+  for (int r = 1; r < nRows; r++) {
+    pdRowOffsets[r] = (m_dRMax + m_dAMax)*(1. - 2*static_cast<double>(rand())/static_cast<double>(RAND_MAX));
+  }
+
   for (int p = 0; p < m_nSpherocyls; p++) {
     h_pdR[p] = m_dRMax;
     h_pdA[p] = m_dAMax;
@@ -1029,7 +1202,7 @@ void Spherocyl_Box::place_spherocyl_grid(int seed, bool bRandAngle)
   h_pdX[0] = dXOffset + dRWidth* static_cast<double>(rand())/static_cast<double>(RAND_MAX);
   h_pdY[0] = dYOffset + dRHeight * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
   if (bRandAngle)
-    h_pdPhi[0] = 2*D_PI * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
+    h_pdPhi[0] = uniformToAngleDist( static_cast<double>(rand())/static_cast<double>(RAND_MAX), dC);
   else
     h_pdPhi[0] = 0;
 
@@ -1038,12 +1211,15 @@ void Spherocyl_Box::place_spherocyl_grid(int seed, bool bRandAngle)
     int nTries = 0;
     int nR = p / nCols;
     int nC = p % nCols;
+    //double dCOffset = pdColOffsets[nC];
+    double dROffset = pdRowOffsets[nR];
+    double dCOffset = 0;
 
     while (bContact) {
-      h_pdX[p] = nC*dWidth + dXOffset + dRWidth * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
-      h_pdY[p] = nR*dHeight + dYOffset + dRHeight * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
+      h_pdX[p] = nC*dWidth + dXOffset + dROffset + dRWidth * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
+      h_pdY[p] = nR*dHeight + dYOffset + dCOffset + dRHeight * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
       if (bRandAngle)
-	h_pdPhi[p] = 2*D_PI * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
+	h_pdPhi[p] = uniformToAngleDist( static_cast<double>(rand()) / static_cast<double>(RAND_MAX), dC);
       else
 	h_pdPhi[p] = 0;
 	
@@ -1053,13 +1229,76 @@ void Spherocyl_Box::place_spherocyl_grid(int seed, bool bRandAngle)
     }
     cout << "Spherocylinder " << p << " placed in " << nTries << " attempts." << endl;
   }
+  
+  //flip_group();
 
   cudaMemcpyAsync(d_pdX, h_pdX, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);
   cudaMemcpyAsync(d_pdY, h_pdY, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);
   cudaMemcpyAsync(d_pdPhi, h_pdPhi, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);
   cudaThreadSynchronize();
   cout << "Data copied to device" << endl;
+  
+  //delete[] pdColOffsets;
+  delete[] pdRowOffsets;
+}
 
+double log_normal(double dNormalRand, double dMu, double dSig) {
+  return exp(log(dMu) + dSig*dNormalRand);
+}
+
+
+void Spherocyl_Box::set_shapes(int seed, double dBidispersity) {
+  if (m_dASig > 0) {
+    cout << "Setting shapes, Aspect sigma = " << m_dASig << endl;
+    srand(time(0) + seed);
+    double dAMu = m_dAMax / m_dRMax;
+    double dASigAbs = dAMu * m_dASig;
+    double dR = 0.5;
+    double dRDiff = (dBidispersity-1) * dR;
+    double dTargetPack = 0.5*(1 + dBidispersity*dBidispersity) * m_nSpherocyls * dR*dR * (4*dAMu + D_PI)/(m_dLx*m_dLy);
+    
+    double dK = dAMu*dAMu/(dASigAbs*dASigAbs);
+    double dT = dASigAbs*dASigAbs/dAMu;
+    default_random_engine generator;
+    gamma_distribution<double> gamma_dist(dK, dT);
+    for (int p = 0; p < m_nSpherocyls; p++) {
+      h_pdR[p] = dR + (1-(p%2))*dRDiff;
+      
+      double dAlpha = gamma_dist(generator);
+      h_pdA[p] = h_pdR[p]*dAlpha;
+      if (h_pdA[p] > m_dAMax)
+	m_dAMax = h_pdA[p];
+      
+      h_pnMemID[p] = p;
+      //cout << "Shape for particle " << p << ": " << h_pdR[p] << " " << h_pdA[p] << endl; 
+    }
+
+    cout << "Shape distribution set" << endl;
+    cout << "Alpha mean: " << dAMu << ", Absolute sigma: " << dASigAbs << ", A max: " << m_dAMax << endl;
+    double dActualPack = calculate_packing();
+    cout << "Target pack: " << dTargetPack << ", Actual pack: " << dActualPack << endl;
+    double dPackDelta = sqrt(dActualPack/dTargetPack);
+    cout << "Packing adjustment: " << dPackDelta << endl;
+    m_dLx *= dPackDelta;
+    m_dLy *= dPackDelta;
+    m_dPacking = calculate_packing();
+    cout << "Corrected packing: " << m_dPacking << endl;
+  }
+  else {
+    cout << "Setting shapes, Aspect sigma = " << "None" << endl;
+    double dAspect = m_dAMax / m_dRMax;
+    double dR = 0.5;
+    double dA = dAspect * dR;
+    double dRDiff = (dBidispersity-1) * dR;
+    double dADiff = (dBidispersity-1) * dA;
+    //cout << "Aspect: " << dAspect << " R/A min: " << dR << "/" << dA << " R/A diff: " << dRDiff << "/" << dADiff << endl;
+    for (int p = 0; p < m_nSpherocyls; p++) {
+      //cout << p << ":  R: " << dR + (1-(p%2))*dRDiff << " A: " << dA + (1-(p%2))*dADiff << endl;
+      h_pdR[p] = dR + (1-(p%2))*dRDiff;
+      h_pdA[p] = dA + (1-(p%2))*dADiff;
+      h_pnMemID[p] = p;
+    }
+  }
 }
 
 void Spherocyl_Box::place_spherocyls(Config config, int seed, double dBidispersity)
@@ -1071,15 +1310,17 @@ void Spherocyl_Box::place_spherocyls(Config config, int seed, double dBidispersi
   }
   else {
      srand(time(0) + seed);
-
+   
      double dAspect = m_dAMax / m_dRMax;
+     double dC = dAspect*(8 + 6*D_PI*dAspect + 8*dAspect*dAspect)/(3*D_PI + 24*dAspect + 6*D_PI*dAspect*dAspect + 8*dAspect*dAspect*dAspect);
+     /*
      double dR = 0.5;
      double dA = dAspect * dR;
      double dRDiff = (dBidispersity-1) * dR;
      double dADiff = (dBidispersity-1) * dA;
      for (int p = 0; p < m_nSpherocyls; p++) {
-       h_pdR[p] = dR + (p%2)*dRDiff;
-       h_pdA[p] = dA + (p%2)*dADiff;
+       h_pdR[p] = dR + (1-(p%2))*dRDiff;
+       h_pdA[p] = dA + (1-(p%2))*dADiff;
        h_pnMemID[p] = p;
      }
      cudaMemcpy(d_pdR, h_pdR, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);
@@ -1087,10 +1328,22 @@ void Spherocyl_Box::place_spherocyls(Config config, int seed, double dBidispersi
      cudaMemcpyAsync(d_pnInitID, h_pnMemID, sizeof(int)*m_nSpherocyls, cudaMemcpyHostToDevice);
      cudaMemcpyAsync(d_pnMemID, h_pnMemID, sizeof(int)*m_nSpherocyls, cudaMemcpyHostToDevice);
      cudaThreadSynchronize();
+     */
      
      h_pdX[0] = m_dLx * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
      h_pdY[0] = m_dLy * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
-     h_pdPhi[0] = config.minAngle + (config.maxAngle - config.minAngle) * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
+     if (config.angleType == RANDOM) {
+       cout << "Finding configuration with random angle from " << config.minAngle << " to " << config.maxAngle << endl;
+       double dUniformRand = config.minAngle + ((config.maxAngle - config.minAngle) * static_cast<double>(rand())/static_cast<double>(RAND_MAX));
+       h_pdPhi[0] = uniformToAngleDist(dUniformRand, dC);
+       cout << "Angle 0: " << h_pdPhi[0] << endl;
+     }
+     else {
+       cout << "Finding configuration with uniform angle from " << config.minAngle << " to " << config.maxAngle << endl;
+       double dUniformAngle = config.minAngle + ((config.maxAngle - config.minAngle)/(2*m_nSpherocyls));
+       h_pdPhi[0] = uniformToAngleDist(dUniformAngle, dC);
+       cout << "Angle 0: " << h_pdPhi[0] << endl;
+     }	  
      
      for (int p = 1; p < m_nSpherocyls; p++) {
        bool bContact = 1;
@@ -1099,7 +1352,14 @@ void Spherocyl_Box::place_spherocyls(Config config, int seed, double dBidispersi
        while (bContact) {
 	 h_pdX[p] = m_dLx * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
 	 h_pdY[p] = m_dLy * static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
-	 h_pdPhi[p] = config.minAngle + (config.maxAngle - config.minAngle) * static_cast<double>(rand())/static_cast<double>(RAND_MAX);
+	 if (config.angleType == RANDOM) {
+	   double dUniformRand = config.minAngle + ((config.maxAngle - config.minAngle) * static_cast<double>(rand())/static_cast<double>(RAND_MAX));
+	   h_pdPhi[p] = uniformToAngleDist(dUniformRand, dC);
+	 }
+	 else {
+	   double dUniformAngle = config.minAngle + ((2*p+1)*(config.maxAngle - config.minAngle)/(2*m_nSpherocyls));
+	   h_pdPhi[p] = uniformToAngleDist(dUniformAngle, dC);
+	 }
 	 
 	 if (config.overlap >= 1)
 	   bContact = check_for_crosses(p);
@@ -1114,5 +1374,32 @@ void Spherocyl_Box::place_spherocyls(Config config, int seed, double dBidispersi
      cudaMemcpyAsync(d_pdPhi, h_pdPhi, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);
      cudaThreadSynchronize();
      cout << "Data copied to device" << endl;
+  }
+}
+
+void Spherocyl_Box::flip_group()
+{
+  int nGroup = int((m_dRMax + m_dAMax)/m_dRMax);
+  int nCols = int(sqrt(m_nSpherocyls / nGroup));
+  
+  for (int i = 0; i < nGroup*nCols; i += nCols) {
+    double dOldX = h_pdX[i];
+    double dOldY = h_pdY[i];
+    h_pdX[i] = dOldY;
+    h_pdY[i] = dOldX;
+    h_pdPhi[i] += D_PI/2;
+  }
+  cudaMemcpyAsync(d_pdX, h_pdX, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);
+  cudaMemcpyAsync(d_pdY, h_pdY, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);
+  cudaMemcpyAsync(d_pdPhi, h_pdPhi, sizeof(double)*m_nSpherocyls, cudaMemcpyHostToDevice);
+  cudaThreadSynchronize();
+  cout << "Data copied to device" << endl;
+}
+
+void Spherocyl_Box::get_0e_configs(int nConfigs, double dBidispersity)
+{
+  for (int i = 0; i < nConfigs; i++) {
+    place_random_0e_spherocyls(i, 1, dBidispersity);
+    save_positions(i);
   }
 }

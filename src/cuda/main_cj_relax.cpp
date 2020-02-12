@@ -29,6 +29,34 @@ int int_input(int argc, char* argv[], int argn, char description[] = "")
     return input;
   }
 }
+long int long_input(int argc, char* argv[], int argn, char description[] = "")
+{
+  if (argc > argn) {
+    long int input = atol(argv[argn]);
+    cout << description << ": " << input << endl;
+    return input;
+  }
+  else {
+    long int input;
+    cout << description << ": ";
+    cin >> input;
+    return input;
+  }
+}
+unsigned long unsigned_input(int argc, char* argv[], int argn, char description[] = "")
+{
+  if (argc > argn) {
+    unsigned long input = strtoul(argv[argn], NULL, 0);
+    cout << description << ": " << input << endl;
+    return input;
+  }
+  else {
+    unsigned long input;
+    cout << description << ": ";
+    cin >> input;
+    return input;
+  }
+}
 double float_input(int argc, char* argv[], int argn, char description[] = "")
 {
   if (argc > argn) {
@@ -69,28 +97,22 @@ int main(int argc, char* argv[])
   cout << strDir << endl;
   int nSpherocyls = int_input(argc, argv, ++argn, "Number of particles");
   cout << nSpherocyls << endl;
-  double dStrainRate = float_input(argc, argv, ++argn, "Strain rate");
-  cout << dStrainRate << endl;
-  double dStep = float_input(argc, argv, ++argn, "Integration step size");
-  cout << dStep << endl;
-  double dRunLength = float_input(argc, argv, ++argn, "Strain run length (gamma)");
-  cout << dRunLength << endl;
-  double dPosSaveRate = float_input(argc, argv, ++argn, "Position data save rate");
-  cout << dPosSaveRate << endl;
-  double dStressSaveRate = float_input(argc, argv, ++argn, "Stress data save rate");
-  cout << dStressSaveRate << endl;
+  double dMaxStep = float_input(argc, argv, ++argn, "Maximum step size");
+  cout << dMaxStep << endl;
+  double dMinStep = float_input(argc, argv, ++argn, "Minimum step size");
+  cout << dMinStep << endl;
+  unsigned long nSteps = unsigned_input(argc, argv, ++argn, "Number of steps");
+  cout << nSteps << endl;
+  int nPosSaveInt = int_input(argc, argv, ++argn, "Position data save rate");
+  cout << nPosSaveInt << endl;
+  double nStressSaveInt = int_input(argc, argv, ++argn, "Stress data save rate");
+  cout << nStressSaveInt << endl;
   double dDR = float_input(argc, argv, ++argn, "Cell padding");
   cout << dDR << endl;
-  int nChangeShear = int_input(argc, argv, ++argn, "Change shear direction (1 to reverse, 2 to rotate by gamma, 3 to increase gama and rotate)");
-  cout << nChangeShear << endl;
 
-  if (dStressSaveRate < dStrainRate * dStep)
-    dStressSaveRate = dStrainRate * dStep;
-  if (dPosSaveRate < dStrainRate)
-    dPosSaveRate = dStrainRate;
 
   double dL;
-  double dLx = 0;
+  double dLx;
   double dLy = 0;
   double *dX = new double[nSpherocyls];
   double *dY = new double[nSpherocyls];
@@ -101,10 +123,9 @@ int main(int argc, char* argv[])
   double dAMax = 0.0;
   double dAspect = 4;
   double dBidispersity = 1;
-  double dAspectSigma = 0;
   double dGamma;
   double dTotalGamma;
-  long unsigned int nTime = 0;
+  unsigned long int nTime = 0;
   double dPacking;
   initialConfig config;
   Config sConfig;
@@ -112,56 +133,40 @@ int main(int argc, char* argv[])
   {
     double dPacking = float_input(argc, argv, ++argn, "Packing Fraction");
     cout << dPacking << endl;
-    dAspect = float_input(argc, argv, ++argn, "Aspect ratio (i.e. A/R or 2A/D)");
+    dAspect = float_input(argc, argv, ++argn, "Aspect ratio (i.e. A/R or 2A/D):");
     cout << dAspect << endl;
-    dBidispersity = float_input(argc, argv, ++argn, "Bidispersity ratio: (1 for monodisperse)");
+    dBidispersity = float_input(argc, argv, ++argn, "Bidispersity ratio: (1 for monodisperse):");
     cout << dBidispersity << endl;
     if (argc > argn) {
-      config = (initialConfig)int_input(argc, argv, ++argn, "Initial configuration (0: random, 1: random-uniform, 2: random-aligned, 3: zero-energy, 4: zero-energy-uniform, 5: zero-energy-aligned, 6: grid, 7: grid-uniform, 8: grid-aligned, 9: other-specified)");
-      if (config == 9) {
-	sConfig.type = (configType)int_input(argc, argv, ++argn, "Position configuration type (0: random, 1: grid)");
+      config = (initialConfig)int_input(argc, argv, ++argn, "Initial configuration (0: random, 1: random-aligned, 2: zero-energy, 3: zero-energy-aligned, 4: grid, 5: grid-aligned, 6: other-specified)");
+      if (config == 6) {
+	sConfig.type = (configType)int_input(argc, argv, ++argn, "Configuration type (0: random, 1: grid)");
 	sConfig.minAngle = float_input(argc, argv, ++argn, "Minimum angle");
 	sConfig.maxAngle = float_input(argc, argv, ++argn, "Maximum angle");
 	sConfig.overlap = float_input(argc, argv, ++argn, "Allowed overlap (min 0, max 1)");
-	sConfig.angleType = (configType)int_input(argc, argv, ++argn, "Angle distribution type (0: random, 1: uniform");
       }
       else {
-	if (config < 6)
+	if (config < 4)
 	  sConfig.type = RANDOM;
 	else
 	  sConfig.type = GRID;
-	sConfig.minAngle = 0.;
-	if (config % 3 == 2)
+	sConfig.minAngle = 0;
+	if (config % 2 == 1)
 	  sConfig.maxAngle = 0;
 	else
-	  sConfig.maxAngle = 1.;
-	if (config >= 3 && config < 6)
+	  sConfig.maxAngle = D_PI;
+	if (config >= 2 && config < 4)
 	  sConfig.overlap = 0;
 	else
 	  sConfig.overlap = 1;
-	if (config % 3 == 0)
-	  sConfig.angleType = RANDOM;
-	else 
-	  sConfig.angleType = GRID;
       }
-      dAspectSigma = float_input(argc, argv, ++argn, "Aspect Ratio distribution width (relative deviation)");
-      cout << dAspectSigma << endl;
-      
     }
     else {
       sConfig.type = RANDOM;
       sConfig.minAngle = 0;
-      sConfig.maxAngle = 1;
+      sConfig.maxAngle = D_PI;
       sConfig.overlap = 1;
-      sConfig.angleType = RANDOM;
     }
-    cout << "Config\n";
-    cout << "Position: " << sConfig.type << "\n";
-    cout << "Min angle: " << sConfig.minAngle << "\n";
-    cout << "Max angle: " << sConfig.maxAngle << "\n";
-    cout << "Overlap: " << sConfig.overlap << "\n";
-    cout << "Angle: " << sConfig.angleType << endl;
-
     double dR = 0.5;
     double dA = dAspect*dR;
     double dArea = 0.5*nSpherocyls*(1+dBidispersity*dBidispersity)*(4*dA + D_PI * dR)*dR;
@@ -204,22 +209,13 @@ int main(int argc, char* argv[])
     	dPacking = cData.getHeadFloat(3);
     	dGamma = cData.getHeadFloat(4);
     	dTotalGamma = cData.getHeadFloat(5);
-	//cout << "Read Lx: " << dLx << " Ly: " << dLy << endl;
     }
     else {
     	dL = cData.getHeadFloat(1);
     	dPacking = cData.getHeadFloat(2);
     	dGamma = cData.getHeadFloat(3);
-       	dTotalGamma = cData.getHeadFloat(4);
-	//cout << "Read L: " << dL << endl;
+    	dTotalGamma = cData.getHeadFloat(4);
     }
-    if (cData.getHeadFloat(5) != dStrainRate) {
-      cerr << "Warning: Strain rate in data file does not match the requested rate" << endl;
-    }
-    if (cData.getHeadFloat(6) != dStep) {
-      cerr << "Warning: Integration step size in data file does not match requested step" << endl;
-    }
-    //cout << "Read positions, particle 0: " << dX[0] << ", " << dY[0] << ", " << dPhi[0] << endl;
     
     int nFileLen = strFile.length();
     string strNum = strFile.substr(nFileLen-14, 10);
@@ -235,44 +231,27 @@ int main(int argc, char* argv[])
 
   Spherocyl_Box *cSpherocyls;
   if (strFile == "r") {
-    cout << "Initializing box of length " << dL << " with " << nSpherocyls << " particles." << endl;
-    cSpherocyls = new Spherocyl_Box(nSpherocyls, dL, dAspect, dBidispersity, sConfig, dDR, dAspectSigma);
+    cout << "Initializing box of length " << dL << " with " << nSpherocyls << " particles.";
+    cSpherocyls = new Spherocyl_Box(nSpherocyls, dL, dAspect, dBidispersity, sConfig, dDR);
   }
   else {
-    if (dLy == 0) {
-      cout << "Initializing box from file of length " << dL << " with " << nSpherocyls << " particles." << endl;
-      cSpherocyls = new Spherocyl_Box(nSpherocyls, dL, dX, dY, dPhi, dRad, dA, dDR);
-    }
-    else {
-      cout << "Initializing box from file of length " << dLx << " x " << dLy << " with " << nSpherocyls << " particles." << endl;
-      cSpherocyls = new Spherocyl_Box(nSpherocyls, dLx, dLy, dX, dY, dPhi, dRad, dA, dDR);
-    }
+	  if (dLy == 0) {
+	  		cout << "Initializing box from file of length " << dL << " with " << nSpherocyls << " particles." << endl;
+	  		cSpherocyls = new Spherocyl_Box(nSpherocyls, dL, dX, dY, dPhi, dRad, dA, dDR);
+	  	}
+	  	else {
+	  		cout << "Initializing box from file of length " << dLx << " x " << dLy << " with " << nSpherocyls << " particles." << endl;
+	  		cSpherocyls = new Spherocyl_Box(nSpherocyls, dLx, dLy, dX, dY, dPhi, dRad, dA, dDR);
+	  	}
   }
   cout << "Spherocyls initialized" << endl;
 
   cSpherocyls->set_gamma(dGamma);
   cSpherocyls->set_total_gamma(dTotalGamma);
-  cSpherocyls->set_strain(dStrainRate);
-  cSpherocyls->set_step(dStep);
+  cSpherocyls->set_strain(0);
+  cSpherocyls->set_step(0.01);
   cSpherocyls->set_data_dir(szDir);
   cout << "Configuration set" << endl;
-  if (nChangeShear == 1) { 
-    cSpherocyls->set_total_gamma(0);
-    cSpherocyls->flip_shear_direction();
-    cout << "Shear direction reversed" << endl;
-  }
-  else if (nChangeShear == 2) {
-    cSpherocyls->set_total_gamma(0);
-    cSpherocyls->rotate_by_gamma();
-    cout << "Shear direction rotated" << endl;
-  }
-  else if (nChangeShear == 3) {
-    double dGammaMax = float_input(argc, argv, ++argn, "Max gamma to shear before rotation");
-    cSpherocyls->run_strain(dGammaMax);
-    cSpherocyls->set_total_gamma(0);
-    cSpherocyls->rotate_by_gamma();
-    cout << "Shear direction rotated" << endl;
-  }
   
   //cSpherocyls.place_random_spherocyls();
   //cout << "Random spherocyls placed" << endl;
@@ -283,26 +262,11 @@ int main(int argc, char* argv[])
   cout << "Neighbor lists created" << endl;
   cSpherocyls->calculate_stress_energy();
   cout << "Stresses calculated" << endl;
-  cSpherocyls->display(1,1,1,1);
+  cSpherocyls->display(1,0,0,1);
 
-  /*
-  cSpherocyls.find_neighbors();
-  cout << "Neighbor lists created" << endl;
-  cSpherocyls.display(1,0,1,0);
-  cSpherocyls.reorder_particles();
-  cSpherocyls.reset_IDs();
-  cout << "Spherocyls spatially reordered" << endl;
-  cSpherocyls.display(1,0,1,0);
-  cSpherocyls.set_gamma(0.5);
-  cSpherocyls.set_back_gamma();
-  cout << "Gamma reset" << endl;
-  cSpherocyls.display(1,0,1,0);
-  cSpherocyls.calculate_stress_energy();
-  cout << "Energy and stress tensor calculated" << endl;
-  cSpherocyls.display(0,0,0,1);
-  */
 
-  cSpherocyls->run_strain(nTime, dRunLength, dStressSaveRate, dPosSaveRate);
+  cSpherocyls->cjpr_relax(dMinStep, dMaxStep);
+  cSpherocyls->calculate_stress_energy();
   cSpherocyls->display(1,0,0,1);
 
   int tStop = time(0);

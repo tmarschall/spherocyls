@@ -36,7 +36,7 @@ __global__ void calc_se(int nSpherocyls, int *pnNPP, int *pnNbrList,
   int thid = threadIdx.x;
   int nPID = thid + blockIdx.x * blockDim.x;
   int nThreads = blockDim.x * gridDim.x;
-  int offset = blockDim.x + 8; // +8 helps to avoid bank conflicts
+  int offset = blockDim.x;
   for (int i = 0; i < 5; i++)
     sData[i*offset + thid] = 0.0;
   __syncthreads();  // synchronizes every thread in the block before going on
@@ -73,57 +73,257 @@ __global__ void calc_se(int nSpherocyls, int *pnNPP, int *pnNbrList,
 	  double nyA = dA * sin(dPhi);
 	  double nxB = dB * cos(dPhiB);
 	  double nyB = dB * sin(dPhiB);
-
-	  double a = dA * dA;
-	  double b = -(nxA * nxB + nyA * nyB);
-	  double c = dB * dB;
-	  double d = nxA * dDeltaX + nyA * dDeltaY;
-	  double e = -nxB * dDeltaX - nyB * dDeltaY;
-	  double delta = a * c - b * b;
-
-	  double t = fmin( fmax( (b*d-a*e)/delta, -1. ), 1. );
-	  double s = -(b*t+d)/a;
-	  double sarg = fabs(s);
-	  s = fmin( fmax(s,-1.), 1. );
-	  if (sarg > 1) 
-	    t = fmin( fmax( -(b*s+e)/c, -1.), 1.);
-	  
-	  // Check if they overlap and calculate forces
-	  double dDx = dDeltaX + s*nxA - t*nxB;
-	  double dDy = dDeltaY + s*nyA - t*nyB;
-	  double dDSqr = dDx * dDx + dDy * dDy;
-	  if (dDSqr < dSigma*dSigma)
-	    {
-	      double dDij = sqrt(dDSqr);
-	      double dDVij;
-	      double dAlpha;
-	      if (ePot == HARMONIC)
+	  if (dA == 0) {
+	    double s = 0;
+	    double t;
+	    if (dB == 0) {
+	      t = 0;
+	    }
+	    else {
+	      double c = dB*dB;
+	      double e = nxB * dDeltaX + nyB * dDeltaY;
+	      t = fmin(fmax(e/c, -1), 1);
+	    }
+	    double dDx = dDeltaX + s*nxA - t*nxB;
+	    double dDy = dDeltaY + s*nyA - t*nyB;
+	    double dDSqr = dDx * dDx + dDy * dDy;
+	    if (dDSqr < dSigma*dSigma)
+	      {
+		double dDij = sqrt(dDSqr);
+		double dDVij;
+		double dAlpha;
+		if (ePot == HARMONIC)
+		  {
+		    dDVij = (1.0 - dDij / dSigma) / dSigma;
+		    dAlpha = 2.0;
+		  }
+		else if (ePot == HERTZIAN)
+		  {
+		    dDVij = (1.0 - dDij / dSigma) * sqrt(1.0 - dDij / dSigma) / dSigma;
+		    dAlpha = 2.5;
+		  }  
+		double dPfx = dDx * dDVij / dDij;
+		double dPfy = dDy * dDVij / dDij;	
+		double dCx = 0.5 * dDx - s*nxA;
+		double dCy = 0.5 * dDy - s*nyA;
+		dFx += dPfx;
+		dFy += dPfy;
+		dFt += s*nxA * dPfy - s*nyA * dPfx;
+		
+		sData[thid] += dCx * dPfx / (dLx * dLy);
+		sData[thid + offset] += dCy * dPfy / (dLx * dLy);
+		sData[thid + 2*offset] += dCx * dPfy / (dLx * dLy);
+		sData[thid + 3*offset] += dCy * dPfx / (dLx * dLy);
+		sData[thid + 4*offset] += 0.5 * dDVij * dSigma * (1.0 - dDij / dSigma) / (dAlpha * dLx * dLy);
+	      }
+	  }
+	  else {
+	    if (dB == 0) {
+	      double t = 0;
+	      double a = dA*dA;
+	      double d = nxA *dDeltaX + nyA * dDeltaY;
+	      double s = fmin(fmax(-d/a, -1), 1);
+	      
+	      double dDx = dDeltaX + s*nxA - t*nxB;
+	      double dDy = dDeltaY + s*nyA - t*nyB;
+	      double dDSqr = dDx * dDx + dDy * dDy;
+	      if (dDSqr < dSigma*dSigma)
 		{
-		  dDVij = (1.0 - dDij / dSigma) / dSigma;
-		  dAlpha = 2.0;
-		}
-	      else if (ePot == HERTZIAN)
-		{
-		  dDVij = (1.0 - dDij / dSigma) * sqrt(1.0 - dDij / dSigma) / dSigma;
-		  dAlpha = 2.5;
-		}
-	      double dPfx = dDx * dDVij / dDij;
-	      double dPfy = dDy * dDVij / dDij;
-	      double dCx = 0.5 * dDx - s*nxA;
-	      double dCy = 0.5 * dDy - s*nyA;
-	      dFx += dPfx;
-	      dFy += dPfy;
-	      dFt += s*nxA * dPfy - s*nyA * dPfx;
-
-	      sData[thid] += dCx * dPfx / (dLx * dLy);
-	      sData[thid + offset] += dCy * dPfy / (dLx * dLy);
-	      sData[thid + 2*offset] += dCx * dPfy / (dLx * dLy);
-	      sData[thid + 3*offset] += dCy * dPfx / (dLx * dLy);
-	      if (nAdjPID > nPID)
-		{
-		  sData[thid + 4*offset] += dDVij * dSigma * (1.0 - dDij / dSigma) / (dAlpha * dLx * dLy);
+		  double dDij = sqrt(dDSqr);
+		  double dDVij;
+		  double dAlpha;
+		  if (ePot == HARMONIC)
+		    {
+		      dDVij = (1.0 - dDij / dSigma) / dSigma;
+		      dAlpha = 2.0;
+		    }
+		  else if (ePot == HERTZIAN)
+		    {
+		      dDVij = (1.0 - dDij / dSigma) * sqrt(1.0 - dDij / dSigma) / dSigma;
+		      dAlpha = 2.5;
+		    }  
+		  double dPfx = dDx * dDVij / dDij;
+		  double dPfy = dDy * dDVij / dDij;	
+		  double dCx = 0.5 * dDx - s*nxA;
+		  double dCy = 0.5 * dDy - s*nyA;
+		  dFx += dPfx;
+		  dFy += dPfy;
+		  dFt += s*nxA * dPfy - s*nyA * dPfx;
+		  
+		  sData[thid] += dCx * dPfx / (dLx * dLy);
+		  sData[thid + offset] += dCy * dPfy / (dLx * dLy);
+		  sData[thid + 2*offset] += dCx * dPfy / (dLx * dLy);
+		  sData[thid + 3*offset] += dCy * dPfx / (dLx * dLy);
+		  sData[thid + 4*offset] += 0.5 * dDVij * dSigma * (1.0 - dDij / dSigma) / (dAlpha * dLx * dLy);
 		}
 	    }
+	    else {
+	      double a = dA * dA;
+	      double b = -(nxA * nxB + nyA * nyB);
+	      double c = dB * dB;
+	      double d = nxA * dDeltaX + nyA * dDeltaY;
+	      double e = -nxB * dDeltaX - nyB * dDeltaY;
+	      double delta = a * c - b * b;
+	      double s, t;
+	      if (delta <= dA*dB*1e-14) {
+		double s1 = fmin(fmax( -(b+d)/a, -1.0), 1.0);
+		double s2 = fmin(fmax( -(d-b)/a, -1.0), 1.0);
+		if (s1 == s2) {
+		  s = s1;
+		  t = fmin(fmax( -(s*b+e)/c, -1.0), 1.0);
+		  double dDx = dDeltaX + s*nxA - t*nxB;
+		  double dDy = dDeltaY + s*nyA - t*nyB;
+		  double dDSqr = dDx * dDx + dDy * dDy;
+		  if (dDSqr < dSigma*dSigma)
+		    {
+		      double dDij = sqrt(dDSqr);
+		      double dDVij;
+		      double dAlpha;
+		      if (ePot == HARMONIC)
+			{
+			  dDVij = (1.0 - dDij / dSigma) / dSigma;
+			  dAlpha = 2.0;
+			}
+		      else if (ePot == HERTZIAN)
+			{
+			  dDVij = (1.0 - dDij / dSigma) * sqrt(1.0 - dDij / dSigma) / dSigma;
+			  dAlpha = 2.5;
+			}  
+		      double dPfx = dDx * dDVij / dDij;
+		      double dPfy = dDy * dDVij / dDij;	
+		      double dCx = 0.5 * dDx - s*nxA;
+		      double dCy = 0.5 * dDy - s*nyA;
+		      dFx += dPfx;
+		      dFy += dPfy;
+		      dFt += s*nxA * dPfy - s*nyA * dPfx;
+		      
+		      sData[thid] += dCx * dPfx / (dLx * dLy);
+		      sData[thid + offset] += dCy * dPfy / (dLx * dLy);
+		      sData[thid + 2*offset] += dCx * dPfy / (dLx * dLy);
+		      sData[thid + 3*offset] += dCy * dPfx / (dLx * dLy);
+		      sData[thid + 4*offset] += 0.5 * dDVij * dSigma * (1.0 - dDij / dSigma) / (dAlpha * dLx * dLy);
+		    }
+		}
+		else {
+		  double t1,t2;
+		  if (b < 0) {
+		    t1 = fmin(fmax( -(b+e)/c, -1.0), 1.0);
+		    t2 = fmin(fmax( -(e-b)/c, -1.0), 1.0);
+		  }
+		  else {
+		    t1 = fmin(fmax( -(e-b)/c, -1.0), 1.0);
+		    t2 = fmin(fmax( -(b+e)/c, -1.0), 1.0);
+		  }
+		  double dDx1 = dDeltaX + s1*nxA - t1*nxB;
+		  double dDy1 = dDeltaY + s1*nyA - t1*nyB;
+		  double dDSqr1 = dDx1 * dDx1 + dDy1 * dDy1;
+		  if (dDSqr1 < dSigma*dSigma)
+		    {
+		      double dDij = sqrt(dDSqr1);
+		      double dDVij;
+		      double dAlpha;
+		      if (ePot == HARMONIC)
+			{
+			  dDVij = 0.5*(1.0 - dDij / dSigma) / dSigma;
+			  dAlpha = 2.0;
+			}
+		      else if (ePot == HERTZIAN)
+			{
+			  dDVij = 0.5*(1.0 - dDij / dSigma) * sqrt(1.0 - dDij / dSigma) / dSigma;
+			  dAlpha = 2.5;
+			}
+		      double dPfx = dDx1 * dDVij / dDij;
+		      double dPfy = dDy1 * dDVij / dDij;	
+		      double dCx = 0.5 * dDx1 - s*nxA;
+		      double dCy = 0.5 * dDy1 - s*nyA;
+		      dFx += dPfx;
+		      dFy += dPfy;
+		      dFt += s*nxA * dPfy - s*nyA * dPfx;
+		      
+		      sData[thid] += dCx * dPfx / (dLx * dLy);
+		      sData[thid + offset] += dCy * dPfy / (dLx * dLy);
+		      sData[thid + 2*offset] += dCx * dPfy / (dLx * dLy);
+		      sData[thid + 3*offset] += dCy * dPfx / (dLx * dLy);
+		      sData[thid + 4*offset] += 0.5 * dDVij * dSigma * (1.0 - dDij / dSigma) / (dAlpha * dLx * dLy);
+		    }
+		  double dDx2 = dDeltaX + s2*nxA - t2*nxB;
+		  double dDy2 = dDeltaY + s2*nyA - t2*nyB;
+		  double dDSqr2 = dDx2 * dDx2 + dDy2 * dDy2;
+		  if (dDSqr2 < dSigma*dSigma)
+		    {
+		      double dDij = sqrt(dDSqr2);
+		      double dDVij;
+		      double dAlpha;
+		      if (ePot == HARMONIC)
+			{
+			  dDVij = 0.5*(1.0 - dDij / dSigma) / dSigma;
+			  dAlpha = 2.0;
+			}
+		      else if (ePot == HERTZIAN)
+			{
+			  dDVij = 0.5*(1.0 - dDij / dSigma) * sqrt(1.0 - dDij / dSigma) / dSigma;
+			  dAlpha = 2.5;
+			}
+		      double dPfx = dDx2 * dDVij / dDij;
+		      double dPfy = dDy2 * dDVij / dDij;	
+		      double dCx = 0.5 * dDx2 - s*nxA;
+		      double dCy = 0.5 * dDy2 - s*nyA;
+		      dFx += dPfx;
+		      dFy += dPfy;
+		      dFt += s*nxA * dPfy - s*nyA * dPfx;
+		      
+		      sData[thid] += dCx * dPfx / (dLx * dLy);
+		      sData[thid + offset] += dCy * dPfy / (dLx * dLy);
+		      sData[thid + 2*offset] += dCx * dPfy / (dLx * dLy);
+		      sData[thid + 3*offset] += dCy * dPfx / (dLx * dLy);
+		      sData[thid + 4*offset] += 0.5 * dDVij * dSigma * (1.0 - dDij / dSigma) / (dAlpha * dLx * dLy);
+		    }
+		}
+	      }
+	      else {
+		t = fmin( fmax( (b*d-a*e)/delta, -1. ), 1. );
+		s = -(b*t+d)/a;
+		double sarg = fabs(s);
+		s = fmin( fmax(s,-1.), 1. );
+		if (sarg > 1) 
+		  t = fmin( fmax( -(b*s+e)/c, -1.), 1.);
+		
+		// Check if they overlap and calculate forces
+		double dDx = dDeltaX + s*nxA - t*nxB;
+		double dDy = dDeltaY + s*nyA - t*nyB;
+		double dDSqr = dDx * dDx + dDy * dDy;
+		if (dDSqr < dSigma*dSigma)
+		  {
+		    double dDij = sqrt(dDSqr);
+		    double dDVij;
+		    double dAlpha;
+		    if (ePot == HARMONIC)
+		      {
+			dDVij = (1.0 - dDij / dSigma) / dSigma;
+			dAlpha = 2.0;
+		      }
+		    else if (ePot == HERTZIAN)
+		      {
+			dDVij = (1.0 - dDij / dSigma) * sqrt(1.0 - dDij / dSigma) / dSigma;
+			dAlpha = 2.5;
+		      }
+		    double dPfx = dDx * dDVij / dDij;
+		    double dPfy = dDy * dDVij / dDij;	
+		    double dCx = 0.5 * dDx - s*nxA;
+		    double dCy = 0.5 * dDy - s*nyA;
+		    dFx += dPfx;
+		    dFy += dPfy;
+		    dFt += s*nxA * dPfy - s*nyA * dPfx;
+		    
+		    sData[thid] += dCx * dPfx / (dLx * dLy);
+		    sData[thid + offset] += dCy * dPfy / (dLx * dLy);
+		    sData[thid + 2*offset] += dCx * dPfy / (dLx * dLy);
+		    sData[thid + 3*offset] += dCy * dPfx / (dLx * dLy);
+		    sData[thid + 4*offset] += 0.5 * dDVij * dSigma * (1.0 - dDij / dSigma) / (dAlpha * dLx * dLy);
+		  }
+	      }
+	    }
+	  }
 	}
       pdFx[nPID] = dFx;
       pdFy[nPID] = dFy;
@@ -254,13 +454,21 @@ __global__ void find_contact(int nSpherocyls, int *pnNPP, int *pnNbrList,
 	  double d = nxA * dDeltaX + nyA * dDeltaY;
 	  double e = -nxB * dDeltaX - nyB * dDeltaY;
 	  double delta = a * c - b * b;
-
-	  double t = fmin( fmax( (b*d-a*e)/delta, -1. ), 1. );
-	  double s = -(b*t+d)/a;
-	  double sarg = fabs(s);
-	  s = fmin( fmax(s,-1.), 1. );
-	  if (sarg > 1) 
-	    t = fmin( fmax( -(b*s+e)/c, -1.), 1.);
+	  double s, t;
+	  if (delta == 0) {
+	    double s1 = fmin(fmax( -(b+d)/a, -1.0), 1.0);
+	    double s2 = fmin(fmax( -(d-b)/a, -1.0), 1.0);
+	    s = (s1 + s2) / 2;
+	    t  = fmin(fmax( -(b*s+e)/c, -1.0), 1.0);
+	  }
+	  else {
+	    t = fmin( fmax( (b*d-a*e)/delta, -1. ), 1. );
+	    s = -(b*t+d)/a;
+	    double sarg = fabs(s);
+	    s = fmin( fmax(s,-1.), 1. );
+	    if (sarg > 1) 
+	      t = fmin( fmax( -(b*s+e)/c, -1.), 1.);
+	  }
 	  
 	  // Check if they overlap and calculate forces
 	  double dDx = dDeltaX + s*nxA - t*nxB;

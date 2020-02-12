@@ -105,6 +105,7 @@ int main(int argc, char* argv[])
   double dTotalGamma;
   long unsigned int nTime = 0;
   double dPacking;
+  double dBoxAspect;
   initialConfig config;
   Config sConfig;
   if (strFile == "r")
@@ -115,28 +116,35 @@ int main(int argc, char* argv[])
     cout << dAspect << endl;
     dBidispersity = float_input(argc, argv, ++argn, "Bidispersity ratio: (1 for monodisperse):");
     cout << dBidispersity << endl;
+    dBoxAspect = float_input(argc, argv, ++argn, "Box Aspect Ratio (Ly/Lx):");
+    cout << dBoxAspect << endl;
     if (argc > argn) {
-      config = (initialConfig)int_input(argc, argv, ++argn, "Initial configuration (0: random, 1: random-aligned, 2: zero-energy, 3: zero-energy-aligned, 4: grid, 5: grid-aligned, 6: other-specified)");
-      if (config == 6) {
+      config = (initialConfig)int_input(argc, argv, ++argn, "Initial configuration (0: random, 1: random-uniform, 2: random-aligned, 3: zero-energy, 4: zero-energy-uniform, 5: zero-energy-aligned, 6: grid, 7: grid-uniform, 8: grid-aligned, 9: other-specified)");
+      if (config == 9) {
 	sConfig.type = (configType)int_input(argc, argv, ++argn, "Configuration type (0: random, 1: grid)");
 	sConfig.minAngle = float_input(argc, argv, ++argn, "Minimum angle");
 	sConfig.maxAngle = float_input(argc, argv, ++argn, "Maximum angle");
 	sConfig.overlap = float_input(argc, argv, ++argn, "Allowed overlap (min 0, max 1)");
+	sConfig.angleType = (configType)int_input(argc, argv, ++argn, "Angle Distribution (0: random, 1: uniform");
       }
       else {
-	if (config < 4)
+	if (config < 6)
 	  sConfig.type = RANDOM;
 	else
 	  sConfig.type = GRID;
 	sConfig.minAngle = 0;
-	if (config % 2 == 1)
+	if (config % 3 == 2)
 	  sConfig.maxAngle = 0;
 	else
-	  sConfig.maxAngle = D_PI;
-	if (config >= 2 && config < 4)
+	  sConfig.maxAngle = 1;
+	if (config >= 3 && config < 6)
 	  sConfig.overlap = 0;
 	else
 	  sConfig.overlap = 1;
+	if (config %3 == 0)
+	  sConfig.angleType = RANDOM;
+	else
+	  sConfig.angleType = GRID;
       }
     }
     else {
@@ -149,6 +157,8 @@ int main(int argc, char* argv[])
     double dA = dAspect*dR;
     double dArea = 0.5*nSpherocyls*(1+dBidispersity*dBidispersity)*(4*dA + D_PI * dR)*dR;
     dL = sqrt(dArea / dPacking);
+    dLx = dL/sqrt(dBoxAspect);
+    dLy = dL*sqrt(dBoxAspect);
     cout << "Box length L: " << dL << endl;
     dRMax = dBidispersity*dR;
     dAMax = dBidispersity*dA;
@@ -197,29 +207,34 @@ int main(int argc, char* argv[])
     
     int nFileLen = strFile.length();
     string strNum = strFile.substr(nFileLen-14, 10);
-    nTime = atoi(strNum.c_str());
+    nTime = atol(strNum.c_str());
     cout << "Time: " << strNum << " " << nTime << endl;
+    dAspect = dA[0] / dRad[0];
+    dBidispersity = dRad[0] / dRad[1];
     for (int p = 0; p < nSpherocyls; p++) {
     	if (dA[p] > dAMax) { dAMax = dA[p]; }
     	if (dRad[p] > dRMax) { dRMax = dRad[p]; }
     }
   }
   
+  int nMaxPPC = 2*((dAspect+1)*dBidispersity+2)+2;
+  int nMaxNbrs = int(D_PI*nMaxPPC + 1);
+  
   int tStart = time(0);
 
   Spherocyl_Box *cSpherocyls;
   if (strFile == "r") {
-    cout << "Initializing box of length " << dL << " with " << nSpherocyls << " particles.";
-    cSpherocyls = new Spherocyl_Box(nSpherocyls, dL, dAspect, dBidispersity, sConfig, dDR);
+    cout << "Initializing box of length " << dLx << " x " << dLy << " with " << nSpherocyls << " particles.";
+    cSpherocyls = new Spherocyl_Box(nSpherocyls, dLx, dLy, dAspect, dBidispersity, sConfig, dDR);
   }
   else {
 	  if (dLy == 0) {
 	  		cout << "Initializing box from file of length " << dL << " with " << nSpherocyls << " particles." << endl;
-	  		cSpherocyls = new Spherocyl_Box(nSpherocyls, dL, dX, dY, dPhi, dRad, dA, dDR);
+	  		cSpherocyls = new Spherocyl_Box(nSpherocyls, dL, dX, dY, dPhi, dRad, dA, dDR, nMaxPPC, nMaxNbrs);
 	  	}
 	  	else {
 	  		cout << "Initializing box from file of length " << dLx << " x " << dLy << " with " << nSpherocyls << " particles." << endl;
-	  		cSpherocyls = new Spherocyl_Box(nSpherocyls, dLx, dLy, dX, dY, dPhi, dRad, dA, dDR);
+	  		cSpherocyls = new Spherocyl_Box(nSpherocyls, dLx, dLy, dX, dY, dPhi, dRad, dA, dDR, nMaxPPC, nMaxNbrs);
 	  	}
   }
   cout << "Spherocyls initialized" << endl;

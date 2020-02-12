@@ -1,4 +1,3 @@
-
 // -*- c++ -*-
 /*
 * strain_dynamics.cu
@@ -54,8 +53,8 @@ __global__ void calc_rot_consts(int nSpherocyls, double *pdR, double *pdAs,
 ///////////////////////////////////////////////////////////
 template<Potential ePot, int bCalcStress>
 __global__ void euler_est_sc(int nSpherocyls, int *pnNPP, int *pnNbrList, double dLx, double dLy,
-				 double dGamma, double dStrain, double dStep, double *pdX, double *pdY,
-				 double *pdPhi, double *pdR, double *pdA, double *pdMOI, double *pdFx, double *pdFy,
+			     double dGamma, double dStrain, double dStep, double *pdX, double *pdY,
+			     double *pdPhi, double *pdR, double *pdA, double *pdMOI, double *pdFx, double *pdFy,
 			     double *pdFt, float *pfSE, double *pdTempX, double *pdTempY, double *pdTempPhi)
 { 
   int thid = threadIdx.x;
@@ -102,21 +101,49 @@ __global__ void euler_est_sc(int nSpherocyls, int *pnNPP, int *pnNbrList, double
 	  double nyA = dA * sin(dPhi);
 	  double nxB = dB * cos(dPhiB);
 	  double nyB = dB * sin(dPhiB);
-
-	  double a = dA * dA;
-	  double b = -(nxA * nxB + nyA * nyB);
-	  double c = dB * dB;
-	  double d = nxA * dDeltaX + nyA * dDeltaY;
-	  double e = -nxB * dDeltaX - nyB * dDeltaY;
-	  double delta = a * c - b * b;
-
-	  double t = fmin( fmax( (b*d-a*e)/delta, -1. ), 1. );
-	  double s = -(b*t+d)/a;
-	  double sarg = fabs(s);
-	  s = fmin( fmax(s,-1.), 1. );
-	  if (sarg > 1) 
-	    t = fmin( fmax( -(b*s+e)/c, -1.), 1.);
-	  
+	  double t;
+	  double s;
+	  if (dA == 0) {
+	    s = 0;
+	    if (dB == 0) {
+		t = 0;
+	    }
+	    else {
+	      double c = dB*dB;
+	      double e = nxB * dDeltaX + nyB *dDeltaY;
+	      t = fmin(fmax(e/c, -1), 1);
+	    }
+	  }
+	  else {
+	    if (dB == 0) {
+	      t = 0;
+	      double a = dA*dA;
+	      double d = nxA *dDeltaX + nyA * dDeltaY;
+	      s = fmin(fmax(-d/a, -1), 1);
+	    }
+	    else {
+	      double a = dA * dA;
+	      double b = -(nxA * nxB + nyA * nyB);
+	      double c = dB * dB;
+	      double d = nxA * dDeltaX + nyA * dDeltaY;
+	      double e = -nxB * dDeltaX - nyB * dDeltaY;
+	      double delta = a * c - b * b;
+	      if (delta == 0) {
+		double s1 = fmin(fmax( -(b+d)/a, -1.0), 1.0);
+		double s2 = fmin(fmax( -(d-b)/a, -1.0), 1.0);
+		s = (s1 + s2) / 2;
+		t  = fmin(fmax( -(b*s+e)/c, -1.0), 1.0);
+	      }
+	      else {
+		t = fmin( fmax( (b*d-a*e)/delta, -1. ), 1. );
+		s = -(b*t+d)/a;
+		double sarg = fabs(s);
+		s = fmin( fmax(s,-1.), 1. );
+		if (sarg > 1) 
+		  t = fmin( fmax( -(b*s+e)/c, -1.), 1.);
+	      }
+	    }
+	  }
 	  // Check if they overlap and calculate forces
 	  double dDx = dDeltaX + s*nxA - t*nxB;
 	  double dDy = dDeltaY + s*nyA - t*nyB;
@@ -272,20 +299,49 @@ __global__ void euler_est(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL
 	  double nyA = dA * sin(dPhi);
 	  double nxB = dB * cos(dPhiB);
 	  double nyB = dB * sin(dPhiB);
-
-	  double a = dA * dA;
-	  double b = -(nxA * nxB + nyA * nyB);
-	  double c = dB * dB;
-	  double d = nxA * dDeltaX + nyA * dDeltaY;
-	  double e = -nxB * dDeltaX - nyB * dDeltaY;
-	  double delta = a * c - b * b;
-
-	  double t = fmin( fmax( (b*d-a*e)/delta, -1. ), 1. );
-	  double s = -(b*t+d)/a;
-	  double sarg = fabs(s);
-	  s = fmin( fmax(s,-1.), 1. );
-	  if (sarg > 1) 
-	    t = fmin( fmax( -(b*s+e)/c, -1.), 1.);
+	  double t;
+	  double s;
+	  if (dA == 0) {
+	    s = 0;
+	    if (dB == 0) {
+		t = 0;
+	    }
+	    else {
+	      double c = dB*dB;
+	      double e = nxB * dDeltaX + nyB *dDeltaY;
+	      t = fmin(fmax(e/c, -1), 1);
+	    }
+	  }
+	  else {
+	    if (dB == 0) {
+	      t = 0;
+	      double a = dA*dA;
+	      double d = nxA *dDeltaX + nyA * dDeltaY;
+	      s = fmin(fmax(-d/a, -1), 1);
+	    }
+	    else {
+	      double a = dA * dA;
+	      double b = -(nxA * nxB + nyA * nyB);
+	      double c = dB * dB;
+	      double d = nxA * dDeltaX + nyA * dDeltaY;
+	      double e = -nxB * dDeltaX - nyB * dDeltaY;
+	      double delta = a * c - b * b;
+	      if (delta == 0) {
+		double s1 = fmin(fmax( -(b+d)/a, -1.0), 1.0);
+		double s2 = fmin(fmax( -(d-b)/a, -1.0), 1.0);
+		s = (s1 + s2) / 2;
+		t  = fmin(fmax( -(b*s+e)/c, -1.0), 1.0);
+	      }
+	      else {
+		t = fmin( fmax( (b*d-a*e)/delta, -1. ), 1. );
+		s = -(b*t+d)/a;
+		double sarg = fabs(s);
+		s = fmin( fmax(s,-1.), 1. );
+		if (sarg > 1) 
+		  t = fmin( fmax( -(b*s+e)/c, -1.), 1.);
+	      }
+	    }
+	  }
 	  
 	  // Check if they overlap and calculate forces
 	  double dDx = dDeltaX + s*nxA - t*nxB;
@@ -399,7 +455,7 @@ __global__ void euler_est(int nSpherocyls, int *pnNPP, int *pnNbrList, double dL
 //
 /////////////////////////////////////////////////////////////////
 template<Potential ePot>
-__global__ void heun_corr(int nSpherocyls, int *pnNPP,int *pnNbrList,double dLx, double dLy,
+__global__ void heun_corr(int nSpherocyls, int *pnNPP, int *pnNbrList, double dLx, double dLy,
 			  double dGamma, double dStrain, double dStep, double *pdX, double *pdY,
 			  double *pdPhi, double *pdR, double *pdA, double *pdMOI, double *pdIsoC,
 			  double *pdFx, double *pdFy, double *pdFt, double *pdTempX, double *pdTempY,
@@ -445,20 +501,49 @@ __global__ void heun_corr(int nSpherocyls, int *pnNPP,int *pnNbrList,double dLx,
 	  double nyA = dA * sin(dPhi);
 	  double nxB = dB * cos(dPhiB);
 	  double nyB = dB * sin(dPhiB);
-
-	  double a = dA * dA;
-	  double b = -(nxA * nxB + nyA * nyB);
-	  double c = dB * dB;
-	  double d = nxA * dDeltaX + nyA * dDeltaY;
-	  double e = -nxB * dDeltaX - nyB * dDeltaY;
-	  double delta = a * c - b * b;
-
-	  double t = fmin( fmax( (b*d-a*e)/delta, -1. ), 1. );
-	  double s = -(b*t+d)/a;
-	  double sarg = fabs(s);
-	  s = fmin( fmax(s,-1.), 1. );
-	  if (sarg > 1) 
-	    t = fmin( fmax( -(b*s+e)/c, -1.), 1.);
+	  double t;
+	  double s;
+	  if (dA == 0) {
+	    s = 0;
+	    if (dB == 0) {
+		t = 0;
+	    }
+	    else {
+	      double c = dB*dB;
+	      double e = nxB * dDeltaX + nyB *dDeltaY;
+	      t = fmin(fmax(e/c, -1), 1);
+	    }
+	  }
+	  else {
+	    if (dB == 0) {
+	      t = 0;
+	      double a = dA*dA;
+	      double d = nxA *dDeltaX + nyA * dDeltaY;
+	      s = fmin(fmax(-d/a, -1), 1);
+	    }
+	    else {
+	      double a = dA * dA;
+	      double b = -(nxA * nxB + nyA * nyB);
+	      double c = dB * dB;
+	      double d = nxA * dDeltaX + nyA * dDeltaY;
+	      double e = -nxB * dDeltaX - nyB * dDeltaY;
+	      double delta = a * c - b * b;
+	      if (delta == 0) {
+		double s1 = fmin(fmax( -(b+d)/a, -1.0), 1.0);
+		double s2 = fmin(fmax( -(d-b)/a, -1.0), 1.0);
+		s = (s1 + s2) / 2;
+		t  = fmin(fmax( -(b*s+e)/c, -1.0), 1.0);
+	      }
+	      else {
+		t = fmin( fmax( (b*d-a*e)/delta, -1. ), 1. );
+		s = -(b*t+d)/a;
+		double sarg = fabs(s);
+		s = fmin( fmax(s,-1.), 1. );
+		if (sarg > 1) 
+		  t = fmin( fmax( -(b*s+e)/c, -1.), 1.);
+	      }
+	    }
+	  }
 	  
 	  // Check if they overlap and calculate forces
 	  double dDx = dDeltaX + s*nxA - t*nxB;
@@ -510,7 +595,7 @@ __global__ void heun_corr(int nSpherocyls, int *pnNPP,int *pnNbrList,double dLx,
        
       pdXMoved[nPID] += dDx;
       pdYMoved[nPID] += dDy;
-      if (fabs(pdXMoved[nPID]) > 0.5*dEpsilon || fabs(pdYMoved[nPID]) > 0.5*dEpsilon)
+      if (fabs(pdXMoved[nPID]) + fabs(pdYMoved[nPID]) > 0.5*dEpsilon)
 	*bNewNbrs = 1;
 
       nPID += nThreads;
@@ -532,13 +617,13 @@ void Spherocyl_Box::strain_step(long unsigned int tTime, bool bSvStress, bool bS
 	{
 	case HARMONIC:
 	  euler_est <HARMONIC, 1> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
-	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma,m_dStrainRate,
+	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, m_dStrainRate,
 	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, d_pdFx, 
 	     d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 	  break;
 	case HERTZIAN:
 	  euler_est <HERTZIAN, 1> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
-	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma,m_dStrainRate,
+	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, m_dStrainRate,
 	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, d_pdFx, 
 	     d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 	}
@@ -560,13 +645,13 @@ void Spherocyl_Box::strain_step(long unsigned int tTime, bool bSvStress, bool bS
 	{
 	case HARMONIC:
 	  euler_est <HARMONIC, 0> <<<m_nGridSize, m_nBlockSize>>>
-	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma,m_dStrainRate,
+	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, m_dStrainRate,
 	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, 
 	     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 	  break;
 	case HERTZIAN:
 	  euler_est <HERTZIAN, 0> <<<m_nGridSize, m_nBlockSize>>>
-	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma,m_dStrainRate,
+	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, m_dStrainRate,
 	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, 
 	     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
 	}
@@ -609,9 +694,106 @@ void Spherocyl_Box::strain_step(long unsigned int tTime, bool bSvStress, bool bS
   m_dTotalGamma += m_dStep * m_dStrainRate;
   cudaThreadSynchronize();
 
-  if (m_dGamma > 0.5)
+  if (m_dGamma > 0.5*m_dLx/m_dLy)
     set_back_gamma();
   else if (*h_bNewNbrs)
+    find_neighbors();
+  else if (m_dGamma - floor(m_dGamma) < 1.1 * m_dStep * m_dStrainRate)
+    find_neighbors();
+}
+
+void Spherocyl_Box::strain_step_ngl(long unsigned int tTime, bool bSvStress, bool bSvPos)
+{
+  if (bSvStress)
+    {
+      cudaMemset((void *) d_pfSE, 0, 5*sizeof(float));
+
+      switch (m_ePotential)
+	{
+	case HARMONIC:
+	  euler_est <HARMONIC, 1> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
+	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, m_dStrainRate,
+	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, d_pdFx, 
+	     d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
+	  break;
+	case HERTZIAN:
+	  euler_est <HERTZIAN, 1> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
+	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, m_dStrainRate,
+	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, d_pdFx, 
+	     d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
+	}
+      cudaThreadSynchronize();
+      checkCudaError("Estimating new particle positions, calculating stresses");
+
+      cudaMemcpyAsync(h_pfSE, d_pfSE, 5*sizeof(float), cudaMemcpyDeviceToHost);
+      if (bSvPos)
+	{
+	  cudaMemcpyAsync(h_pdX, d_pdX, m_nSpherocyls*sizeof(double), cudaMemcpyDeviceToHost);
+	  cudaMemcpyAsync(h_pdY, d_pdY, m_nSpherocyls*sizeof(double), cudaMemcpyDeviceToHost);
+	  cudaMemcpyAsync(h_pdPhi, d_pdPhi, m_nSpherocyls*sizeof(double), cudaMemcpyDeviceToHost);
+	}
+      cudaThreadSynchronize();
+    }
+  else
+    {
+      switch (m_ePotential)
+	{
+	case HARMONIC:
+	  euler_est <HARMONIC, 0> <<<m_nGridSize, m_nBlockSize>>>
+	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, m_dStrainRate,
+	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, 
+	     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
+	  break;
+	case HERTZIAN:
+	  euler_est <HERTZIAN, 0> <<<m_nGridSize, m_nBlockSize>>>
+	    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, m_dStrainRate,
+	     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, 
+	     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
+	}
+      cudaThreadSynchronize();
+      checkCudaError("Estimating new particle positions");
+    }
+
+  switch (m_ePotential)
+    {
+    case HARMONIC:
+      heun_corr <HARMONIC> <<<m_nGridSize, m_nBlockSize>>>
+	(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, m_dStrainRate,
+	 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, 
+	 d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, d_pdTempPhi, d_pdXMoved, 
+	 d_pdYMoved, m_dEpsilon, d_bNewNbrs);
+      break;
+    case HERTZIAN:
+      heun_corr <HERTZIAN> <<<m_nGridSize, m_nBlockSize>>>
+	(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, m_dStrainRate,
+	 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, 
+	 d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, d_pdTempPhi, d_pdXMoved, 
+	 d_pdYMoved, m_dEpsilon, d_bNewNbrs);
+    }
+
+  if (bSvStress)
+    {
+      m_fP = 0.5 * (*m_pfPxx + *m_pfPyy);
+      fprintf(m_pOutfSE, "%lu %.7g %.7g %.7g %.7g %.7g %.7g\n", 
+	      tTime, *m_pfEnergy, *m_pfPxx, *m_pfPyy, m_fP, *m_pfPxy, *m_pfPyx);
+      if (bSvPos)
+	save_positions(tTime);
+    }
+
+  cudaThreadSynchronize();
+  checkCudaError("Updating estimates, moving particles");
+  
+  cudaMemcpyAsync(h_bNewNbrs, d_bNewNbrs, sizeof(int), cudaMemcpyDeviceToHost);
+
+  m_dGamma += m_dStep * m_dStrainRate;
+  m_dTotalGamma += m_dStep * m_dStrainRate;
+  cudaThreadSynchronize();
+
+  if (m_dGamma > 0.5*m_dLx/m_dLy)
+    find_neighbors();
+  else if (*h_bNewNbrs)
+    find_neighbors();
+  else if (m_dGamma - int(m_dGamma) < 1.1 * m_dStep * m_dStrainRate)
     find_neighbors();
 }
 
@@ -627,23 +809,54 @@ void Spherocyl_Box::save_positions(long unsigned int nTime)
   const char *szFilePos = szBuf;
   FILE *pOutfPos;
   pOutfPos = fopen(szFilePos, "w");
-  if (pOutfPos == NULL)
-    {
-      fprintf(stderr, "Could not open file for writing");
-      exit(1);
-    }
-
+  if (pOutfPos == NULL) {
+    fprintf(stderr, "Could not open file for writing");
+    exit(1);
+  }
+  
   int i = h_pnMemID[0];
-  fprintf(pOutfPos, "%d %.13g %.13g %.13g %.13g %.13g %g %g\n",
+  fprintf(pOutfPos, "%d %.17g %.17g %f %.17g %.14g %g %g\n",
 	  m_nSpherocyls, m_dLx, m_dLy, m_dPacking, m_dGamma, m_dTotalGamma, m_dStrainRate, m_dStep);
   for (int p = 0; p < m_nSpherocyls; p++)
     {
       i = h_pnMemID[p];
-      fprintf(pOutfPos, "%.13g %.13g %.13g %f %f\n",
+      fprintf(pOutfPos, "%.17g %.17g %.17g %.2g %.17g\n",
 	      h_pdX[i], h_pdY[i], h_pdPhi[i], h_pdR[i], h_pdA[i]);
     }
 
   fclose(pOutfPos); 
+}
+
+void Spherocyl_Box::save_positions_bin(long unsigned int nTime)
+{
+  char szBuf[150];
+  sprintf(szBuf, "%s/sd%010lu.bin", m_szDataDir, nTime);
+  const char *szFilePos = szBuf;
+  FILE *pOutfPos;
+  pOutfPos = fopen(szFilePos, "wb");
+  if (pOutfPos == NULL) {
+    fprintf(stderr, "Could not open file for writing");
+    exit(1);
+  }
+  
+  fwrite(&m_nSpherocyls, sizeof(m_nSpherocyls), 1, pOutfPos);
+  fwrite(&m_dLx, sizeof(m_dLx), 1, pOutfPos);
+  fwrite(&m_dLy, sizeof(m_dLy), 1, pOutfPos);
+  fwrite(&m_dPacking, sizeof(m_dPacking), 1, pOutfPos);
+  fwrite(&m_dGamma, sizeof(m_dGamma), 1, pOutfPos);
+  fwrite(&m_dTotalGamma, sizeof(m_dTotalGamma), 1, pOutfPos);
+  fwrite(&m_dStrainRate, sizeof(m_dStrainRate), 1, pOutfPos);
+  fwrite(&m_dStep, sizeof(m_dStep), 1, pOutfPos);
+  for (int p = 0; p < m_nSpherocyls; p++) {
+    int i = h_pnMemID[p];
+    fwrite(h_pdX+i, sizeof(double), 1, pOutfPos);
+    fwrite(h_pdY+i, sizeof(double), 1, pOutfPos);
+    fwrite(h_pdPhi+i, sizeof(double), 1, pOutfPos);
+    fwrite(h_pdR+i, sizeof(double), 1, pOutfPos);
+    fwrite(h_pdA+i, sizeof(double), 1, pOutfPos);
+  }
+
+  fclose(pOutfPos);
 }
 
 
@@ -702,7 +915,7 @@ void Spherocyl_Box::run_strain(double dStartGamma, double dStopGamma, double dSv
 	  exit(1);
 	}
       
-      int nTpos = 0;
+      unsigned long int nTpos = 0;
       while (nTpos != nTime)
 	{
 	  if (fgets(szBuf, 200, m_pOutfSE) != NULL)
@@ -711,7 +924,7 @@ void Spherocyl_Box::run_strain(double dStartGamma, double dStopGamma, double dSv
 	      char szTime[20];
 	      strncpy(szTime, szBuf, nPos);
 	      szTime[nPos] = '\0';
-	      nTpos = atoi(szTime);
+	      nTpos = atol(szTime);
 	    }
 	  else
 	    {
@@ -804,7 +1017,7 @@ void Spherocyl_Box::run_strain(unsigned long int nStart, double dRunGamma, doubl
 	  exit(1);
 	}
       
-      int nTpos = 0;
+      unsigned long int nTpos = 0;
       while (nTpos != nTime)
 	{
 	  if (fgets(szBuf, 200, m_pOutfSE) != NULL)
@@ -813,7 +1026,7 @@ void Spherocyl_Box::run_strain(unsigned long int nStart, double dRunGamma, doubl
 	      char szTime[20];
 	      strncpy(szTime, szBuf, nPos);
 	      szTime[nPos] = '\0';
-	      nTpos = atoi(szTime);
+	      nTpos = atol(szTime);
 	    }
 	  else
 	    {
@@ -863,6 +1076,19 @@ void Spherocyl_Box::run_strain(long unsigned int nSteps)
       strain_step(nTime, 0, 0);
       nTime += 1;
     }
+
+}
+
+void Spherocyl_Box::run_strain(double dGammaMax)
+{
+  reconfigure_cells(dGammaMax);
+  find_neighbors();
+
+  long unsigned int nTime = 0;
+  while (m_dGamma < dGammaMax) {
+    strain_step_ngl(nTime, 0, 0);
+    nTime += 1;
+  }
 
 }
 
@@ -1008,14 +1234,14 @@ void Spherocyl_Box::resize_box(long unsigned int nStart, double dEpsilon, double
 			exit(1);
 		}
 
-		int nTpos = 0;
+		long unsigned int nTpos = 0;
 		while (nTpos != nTime) {
 			if (fgets(szBuf, 200, m_pOutfSE) != NULL) {
 				int nPos = strcspn(szBuf, " ");
 				char szTime[20];
 				strncpy(szTime, szBuf, nPos);
 				szTime[nPos] = '\0';
-				nTpos = atoi(szTime);
+				nTpos = atol(szTime);
 			}
 		  else {
 			  fprintf(stderr, "Reached end of file without finding start position");
@@ -1088,5 +1314,162 @@ void Spherocyl_Box::resize_box(long unsigned int nStart, double dEpsilon, double
 
 }
 
+
+
+/////////////////////////////////////////
+//
+//  Relax to minimum
+//
+///////////////////////////////////////
+
+
+void Spherocyl_Box::relax_step(long unsigned int tTime, bool bSvStress, bool bSvPos)
+{
+
+	if (bSvStress)
+	    {
+	      cudaMemset((void *) d_pfSE, 0, 5*sizeof(float));
+
+	      switch (m_ePotential)
+		{
+		case HARMONIC:
+		  euler_est <HARMONIC, 1> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
+		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
+		     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, d_pdFx,
+		     d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
+		  break;
+		case HERTZIAN:
+		  euler_est <HERTZIAN, 1> <<<m_nGridSize, m_nBlockSize, m_nSM_CalcSE>>>
+		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
+		     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC, d_pdFx,
+		     d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
+		}
+	      cudaThreadSynchronize();
+	      checkCudaError("Estimating new particle positions, calculating stresses");
+
+	      cudaMemcpyAsync(h_pfSE, d_pfSE, 5*sizeof(float), cudaMemcpyDeviceToHost);
+	      if (bSvPos)
+		{
+		  cudaMemcpyAsync(h_pdX, d_pdX, m_nSpherocyls*sizeof(double), cudaMemcpyDeviceToHost);
+		  cudaMemcpyAsync(h_pdY, d_pdY, m_nSpherocyls*sizeof(double), cudaMemcpyDeviceToHost);
+		  cudaMemcpyAsync(h_pdPhi, d_pdPhi, m_nSpherocyls*sizeof(double), cudaMemcpyDeviceToHost);
+		}
+	      cudaThreadSynchronize();
+	    }
+	  else
+	    {
+	      switch (m_ePotential)
+		{
+		case HARMONIC:
+		  euler_est <HARMONIC, 0> <<<m_nGridSize, m_nBlockSize>>>
+		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
+		     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
+		     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
+		  break;
+		case HERTZIAN:
+		  euler_est <HERTZIAN, 0> <<<m_nGridSize, m_nBlockSize>>>
+		    (m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
+		     m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
+		     d_pdFx, d_pdFy, d_pdFt, d_pfSE, d_pdTempX, d_pdTempY, d_pdTempPhi);
+		}
+	      cudaThreadSynchronize();
+	      checkCudaError("Estimating new particle positions");
+	    }
+
+	  switch (m_ePotential)
+	    {
+	    case HARMONIC:
+	      heun_corr <HARMONIC> <<<m_nGridSize, m_nBlockSize>>>
+		(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
+		 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
+		 d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, d_pdTempPhi, d_pdXMoved,
+		 d_pdYMoved, m_dEpsilon, d_bNewNbrs);
+	      break;
+	    case HERTZIAN:
+	      heun_corr <HERTZIAN> <<<m_nGridSize, m_nBlockSize>>>
+		(m_nSpherocyls, d_pnNPP, d_pnNbrList, m_dLx, m_dLy, m_dGamma, 0,
+		 m_dStep, d_pdX, d_pdY, d_pdPhi, d_pdR, d_pdA, d_pdMOI, d_pdIsoC,
+		 d_pdFx, d_pdFy, d_pdFt, d_pdTempX, d_pdTempY, d_pdTempPhi, d_pdXMoved,
+		 d_pdYMoved, m_dEpsilon, d_bNewNbrs);
+	    }
+
+	  if (bSvStress)
+	    {
+	      m_fP = 0.5 * (*m_pfPxx + *m_pfPyy);
+	      fprintf(m_pOutfSE, "%lu %.7g %.7g %.7g %.7g %.7g %.7g\n",
+		      tTime, *m_pfEnergy, *m_pfPxx, *m_pfPyy, m_fP, *m_pfPxy, *m_pfPyx);
+	      if (bSvPos)
+	    	save_positions(tTime);
+	    }
+
+	cudaThreadSynchronize();
+	checkCudaError("Updating estimates, moving particles");
+
+	cudaMemcpyAsync(h_bNewNbrs, d_bNewNbrs, sizeof(int), cudaMemcpyDeviceToHost);
+	reconfigure_cells();
+	cudaThreadSynchronize();
+
+	if (*h_bNewNbrs)
+	  find_neighbors();
+}
+
+void Spherocyl_Box::relax_box(long unsigned int nSteps, double dMaxStep, double dMinStep, int nSaveStressInt, int nSavePosInt)
+{
+
+	unsigned long int nTime = 0;
+
+	char szBuf[200];
+	sprintf(szBuf, "%s/%s", m_szDataDir, m_szFileSE);
+	const char *szPathSE = szBuf;
+	if (nTime == 0) {
+		m_pOutfSE = fopen(szPathSE, "w");
+		if (m_pOutfSE == NULL) {
+			fprintf(stderr, "Could not open file for writing");
+			exit(1);
+		}
+	}
+	else {
+		m_pOutfSE = fopen(szPathSE, "r+");
+		if (m_pOutfSE == NULL) {
+			fprintf(stderr, "Could not open file for writing");
+			exit(1);
+		}
+
+		long unsigned int nTpos = 0;
+		while (nTpos != nTime) {
+			if (fgets(szBuf, 200, m_pOutfSE) != NULL) {
+				int nPos = strcspn(szBuf, " ");
+				char szTime[20];
+				strncpy(szTime, szBuf, nPos);
+				szTime[nPos] = '\0';
+				nTpos = atol(szTime);
+			}
+		  else {
+			  fprintf(stderr, "Reached end of file without finding start position");
+		      exit(1);
+		  }
+		}
+	}
+	
+	m_dStep = dMaxStep;
+	printf("Starting relax with step size: %g\nStress save rate: %d\nPosition save rate: %d\n", m_dStep, nSaveStressInt, nSavePosInt);
+	while (nTime < nSteps) {
+		bool bSavePos = (nTime % nSavePosInt == 0);
+		bool bSaveStress = (nTime % nSaveStressInt == 0);
+		//printf("Step %l\n", nTime);
+		//fflush(stdout);
+		relax_step(nTime, bSaveStress, bSavePos);
+		if (bSavePos) {
+			fflush(stdout);
+			fflush(m_pOutfSE);
+		}
+		nTime += 1;
+		//if (nTime % nReorderInterval == 0)
+		//reorder_particles();
+	}
+	relax_step(nTime, 1, 1);
+	fclose(m_pOutfSE);
+
+}
 
 

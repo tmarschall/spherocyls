@@ -73,15 +73,15 @@ int main(int argc, char* argv[])
   cout << dStrainRate << endl;
   double dStep = float_input(argc, argv, ++argn, "Integration step size");
   cout << dStep << endl;
-  double dRunLength = float_input(argc, argv, ++argn, "Strain run length (gamma)");
-  cout << dRunLength << endl;
+  double dBoxStopAspect = float_input(argc, argv, ++argn, "Strain stop (Box Aspect Lx/Ly)");
+  cout << dBoxStopAspect << endl;
   double dPosSaveRate = float_input(argc, argv, ++argn, "Position data save rate");
   cout << dPosSaveRate << endl;
   double dStressSaveRate = float_input(argc, argv, ++argn, "Stress data save rate");
   cout << dStressSaveRate << endl;
   double dDR = float_input(argc, argv, ++argn, "Cell padding");
   cout << dDR << endl;
-  int nChangeShear = int_input(argc, argv, ++argn, "Change shear direction (1 to reverse, 2 to rotate by gamma, 3 to increase gama and rotate)");
+  int nChangeShear = int_input(argc, argv, ++argn, "Change shear direction (1 to reverse");
   cout << nChangeShear << endl;
 
   if (dStressSaveRate < dStrainRate * dStep)
@@ -99,7 +99,7 @@ int main(int argc, char* argv[])
   double *dA = new double[nSpherocyls];
   double dRMax = 0.0;
   double dAMax = 0.0;
-  double dAspect = 4;
+  double dSpcylAspect = 4;
   double dBidispersity = 1;
   double dAspectSigma = 0;
   double dGamma;
@@ -112,8 +112,8 @@ int main(int argc, char* argv[])
   {
     double dPacking = float_input(argc, argv, ++argn, "Packing Fraction");
     cout << dPacking << endl;
-    dAspect = float_input(argc, argv, ++argn, "Aspect ratio (i.e. A/R or 2A/D)");
-    cout << dAspect << endl;
+    dSpcylAspect = float_input(argc, argv, ++argn, "Aspect ratio (i.e. A/R or 2A/D)");
+    cout << dSpcylAspect << endl;
     dBidispersity = float_input(argc, argv, ++argn, "Bidispersity ratio: (1 for monodisperse)");
     cout << dBidispersity << endl;
     if (argc > argn) {
@@ -163,9 +163,11 @@ int main(int argc, char* argv[])
     cout << "Angle: " << sConfig.angleType << endl;
 
     double dR = 0.5;
-    double dA = dAspect*dR;
+    double dA = dSpcylAspect*dR;
     double dArea = 0.5*nSpherocyls*(1+dBidispersity*dBidispersity)*(4*dA + D_PI * dR)*dR;
     dL = sqrt(dArea / dPacking);
+    dLy = dL*sqrt(dBoxStopAspect);
+    dLx = dL/sqrt(dBoxStopAspect);
     cout << "Box length L: " << dL << endl;
     dRMax = dBidispersity*dR;
     dAMax = dBidispersity*dA;
@@ -235,8 +237,8 @@ int main(int argc, char* argv[])
 
   Spherocyl_Box *cSpherocyls;
   if (strFile == "r") {
-    cout << "Initializing box of length " << dL << " with " << nSpherocyls << " particles." << endl;
-    cSpherocyls = new Spherocyl_Box(nSpherocyls, dL, dAspect, dBidispersity, sConfig, dDR, dAspectSigma);
+    cout << "Initializing box of length " << dLx << " x " << dLy << " with " << nSpherocyls << " particles." << endl;
+    cSpherocyls = new Spherocyl_Box(nSpherocyls, dLx, dLy, dSpcylAspect, dBidispersity, sConfig, dDR, dAspectSigma);
   }
   else {
     if (dLy == 0) {
@@ -256,22 +258,10 @@ int main(int argc, char* argv[])
   cSpherocyls->set_step(dStep);
   cSpherocyls->set_data_dir(szDir);
   cout << "Configuration set" << endl;
-  if (nChangeShear == 1) { 
-    cSpherocyls->set_total_gamma(0);
-    cSpherocyls->flip_shear_direction();
-    cout << "Shear direction reversed" << endl;
-  }
-  else if (nChangeShear == 2) {
+  if (nChangeShear == 1) {
     cSpherocyls->set_total_gamma(0);
     cSpherocyls->rotate_by_gamma();
-    cout << "Shear direction rotated" << endl;
-  }
-  else if (nChangeShear == 3) {
-    double dGammaMax = float_input(argc, argv, ++argn, "Max gamma to shear before rotation");
-    cSpherocyls->run_strain(dGammaMax);
-    cSpherocyls->set_total_gamma(0);
-    cSpherocyls->rotate_by_gamma();
-    cout << "Shear direction rotated" << endl;
+    cout << "Shear direction flipped (by rotation)" << endl;
   }
   
   //cSpherocyls.place_random_spherocyls();
@@ -302,7 +292,7 @@ int main(int argc, char* argv[])
   cSpherocyls.display(0,0,0,1);
   */
 
-  cSpherocyls->run_strain(nTime, dRunLength, dStressSaveRate, dPosSaveRate);
+  cSpherocyls->run_pure_strain_2p(nTime, dBoxStopAspect, dStressSaveRate, dPosSaveRate);
   cSpherocyls->display(1,0,0,1);
 
   int tStop = time(0);

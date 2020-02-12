@@ -7,4 +7,5 @@ exe/*
 input/*
 !input/.gitkeep
 !input/*.txt
+src/cuda/spd_mix/*
 
